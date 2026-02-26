@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Nintendo Switch Interactive</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+    <script>
+        window.onerror = function (message, source, lineno, colno, error) {
+            const errDiv = document.createElement('div');
+            errDiv.style.position = 'fixed';
+            errDiv.style.top = '10px';
+            errDiv.style.left = '10px';
+            errDiv.style.backgroundColor = 'rgba(220, 38, 38, 0.9)';
+            errDiv.style.color = '#fff';
+            errDiv.style.padding = '15px';
+            errDiv.style.borderRadius = '8px';
+            errDiv.style.zIndex = '999999';
+            errDiv.style.fontFamily = 'monospace';
+            errDiv.innerHTML = '<strong>JS Error:</strong> ' + message + ' at line ' + lineno + '<br><pre style="margin-top:10px; font-size:12px;">' + (error ? error.stack : '') + '</pre>';
+            document.body.appendChild(errDiv);
+        };
+        // Also catch unhandled promise rejections
+        window.addEventListener('unhandledrejection', function (event) {
+            window.onerror('Unhandled Rejection: ' + event.reason, null, 'unknown', 'unknown', event.reason);
+        });
+    </script>
+</head>
+
+<body>
+    <div id="ui-layer">
+        <div id="ui-layer">
+            <!-- Text removed for cleaner presentation -->
+        </div>
+    </div>
+
+    <!-- Hidden 2D Canvas for Switch OS screen rendering -> 16:9 ratio -->
+    <canvas id="screen-canvas" width="1280" height="720" style="display: none;"></canvas>
+
+    <!-- 3D Scene Container -->
+    <div id="scene-container"></div>
+
+    <script type="module" src="main.js"></script>
+</body>
+
+</html>
