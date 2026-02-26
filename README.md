@@ -57,6 +57,3 @@ Then visit `http://localhost:8000` in your browser.
 * **Spacebar or 'A' Key:** Select/Launch a game.
 * **Escape or 'Enter' / 'B' Key:** Exit the current game and return to the Home Menu.
 * **In-Game (Arrow Keys):** Control Snake/Pong functionality.
-
----
-*Note: This README will only be updated upon explicit request.*

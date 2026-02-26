@@ -1,5 +1,11 @@
+import { Progress } from './progress.js';
+import { Unlocks } from './unlocks.js';
+import { Daily } from './daily.js';
+
 export class SnakeApp {
     constructor(gridW, gridH, gridSize) {
+        this.baseGridW = gridW; // Store originals for reset
+        this.baseGridH = gridH;
         this.gridW = gridW;
         this.gridH = gridH;
         this.gridSize = gridSize;
@@ -7,6 +13,17 @@ export class SnakeApp {
     }
 
     reset() {
+        // Restore Grid in case a daily modifier shrunk it
+        this.gridW = this.baseGridW;
+        this.gridH = this.baseGridH;
+
+        // Base defaults
+        this.tickRate = 0.1;
+        this.growthPerApple = 1;
+
+        // Apply daily 
+        Daily.applyToGame(this, 'snake');
+
         this.snake = [
             { x: Math.floor(this.gridW / 2), y: Math.floor(this.gridH / 2) },
             { x: Math.floor(this.gridW / 2) - 1, y: Math.floor(this.gridH / 2) },
@@ -42,7 +59,7 @@ export class SnakeApp {
         if (this.gameOver) return;
 
         this.timer += dt;
-        if (this.timer > 0.1) { // 10 FPS
+        if (this.timer > this.tickRate) {
             this.timer = 0;
             this.dir = { ...this.nextDir };
 
@@ -50,12 +67,14 @@ export class SnakeApp {
 
             // Wall collision
             if (head.x < 0 || head.x >= this.gridW || head.y < 0 || head.y >= this.gridH) {
-                this.gameOver = true;
+                this.triggerGameOver();
             }
 
             // Self collision
             for (let i = 0; i < this.snake.length; i++) {
-                if (head.x === this.snake[i].x && head.y === this.snake[i].y) this.gameOver = true;
+                if (head.x === this.snake[i].x && head.y === this.snake[i].y) {
+                    this.triggerGameOver();
+                }
             }
 
             if (!this.gameOver) {
@@ -63,11 +82,32 @@ export class SnakeApp {
                 if (head.x === this.food.x && head.y === this.food.y) {
                     this.score += 10;
                     this.spawnFood();
+                    // Growth modifier logic
+                    for (let i = 1; i < this.growthPerApple; i++) {
+                        // Push a dummy segment that will naturally occupy the tail's previous spot next tick
+                        this.snake.push({ ...this.snake[this.snake.length - 1] });
+                    }
                 } else {
                     this.snake.pop();
                 }
             }
         }
+    }
+
+    triggerGameOver() {
+        this.gameOver = true;
+
+        let xpGained = this.score; // 10 xp per apple is generous but okay for pacing
+
+        if (Daily.isActive) {
+            xpGained *= 1.5;
+            Daily.isActive = false; // Turn off daily modifiers until requested again
+        }
+
+        Progress.addXP(Math.floor(xpGained), "Played Snake");
+
+        // Check Unlocks (Score 150+ grants the achievement)
+        Unlocks.checkCondition('snake_score_15', { score: this.score });
     }
 
     draw(ctx, w, h) {

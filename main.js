@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { RoundedBoxGeometry } from 'https://unpkg.com/three@0.128.0/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { SnakeApp } from './apps/snake.js';
 import { PongApp } from './apps/pong.js';
 import { SettingsApp } from './apps/settings.js';
+import { Progress } from './apps/progress.js';
+import { Daily } from './apps/daily.js';
 
 // --- 1. Scene Setup & Aesthetics ---
 const container = document.getElementById('scene-container');
@@ -67,10 +69,10 @@ const gridH = Math.floor(h / gridSize);
 // Game State / UI State
 let activeGameIndex = 0;
 const games = [
-    { title: "Snake", color: "#10b981", img: "https://upload.wikimedia.org/wikipedia/en/c/c6/The_Legend_of_Zelda_Breath_of_the_Wild.jpg" }, // Reuse box art for styling
-    { title: "Pong", color: "#b91c1c", img: "https://upload.wikimedia.org/wikipedia/en/8/8d/Super_Mario_Odyssey.jpg" },
+    { title: "Snake", color: "#10b981", img: "snake.png" },
+    { title: "Pong", color: "#b91c1c", img: "pong.png" },
+    { title: "Daily Challenge", color: "#eab308", img: "daily.png" }, // New generic daily app tile
     { title: "Mario Kart 8 Deluxe", color: "#047857", img: "https://upload.wikimedia.org/wikipedia/en/b/b5/MarioKart8Boxart.jpg" },
-    { title: "Animal Crossing", color: "#065f46", img: "https://upload.wikimedia.org/wikipedia/en/1/1f/Animal_Crossing_New_Horizons.jpg" },
     { title: "Super Smash Bros", color: "#4c1d95", img: "https://upload.wikimedia.org/wikipedia/en/5/50/Super_Smash_Bros._Ultimate.jpg" },
     { title: "System Settings", color: "#2a2a2a", img: "" }
 ];
@@ -102,6 +104,19 @@ let currentGameApp = null; // 'snake' or 'pong' or 'settings'
 const snakeApp = new SnakeApp(gridW, gridH, gridSize);
 const pongApp = new PongApp(gridW, gridH, gridSize);
 const settingsApp = new SettingsApp();
+
+// Toast notification state
+let toastQueue = [];
+let activeToast = null;
+let toastTimer = 0;
+
+window.addEventListener('switchplus_unlocked', (e) => {
+    toastQueue.push(`Achievement Unlocked! ${e.detail}`);
+});
+
+Progress.onLevelUp = (newLevel) => {
+    toastQueue.push(`Level Up! You are now Level ${newLevel}!`);
+};
 
 function drawHalfPill(ctx, x, y, width, height, radius, isLeft) {
     ctx.beginPath();
@@ -150,6 +165,17 @@ function updateCanvas(dt) {
         }
     }
 
+    // Handle Toasts
+    if (activeToast) {
+        toastTimer -= dt;
+        if (toastTimer <= 0) {
+            activeToast = null;
+        }
+    } else if (toastQueue.length > 0) {
+        activeToast = toastQueue.shift();
+        toastTimer = 4.0; // Show for 4 seconds
+    }
+
     // Smooth scrolling (Increased spacing from 260 to 320)
     targetScrollX = -(activeGameIndex * 320);
     currentScrollX += (targetScrollX - currentScrollX) * 12 * dt;
@@ -166,13 +192,24 @@ function updateCanvas(dt) {
             gameOverlayOpacity = 1;
             // Launch the actual app once the screen is fully covered
             if (!currentGameApp) {
-                if (activeGameIndex === 0) {
+                // If it's the Daily Challenge tile, set the active game to whatever mode is chosen
+                let loadIndex = activeGameIndex;
+                if (activeGameIndex === 2) { // Daily Challenge
+                    const dailyGame = Daily.getDailyModifier().game;
+                    if (dailyGame === 'snake') loadIndex = 0;
+                    if (dailyGame === 'pong') loadIndex = 1;
+                    Daily.isActive = true; // Flag it!
+                } else {
+                    Daily.isActive = false; // Normal play
+                }
+
+                if (loadIndex === 0) {
                     currentGameApp = snakeApp;
                     snakeApp.reset();
-                } else if (activeGameIndex === 1) {
+                } else if (loadIndex === 1) {
                     currentGameApp = pongApp;
                     pongApp.reset();
-                } else if (activeGameIndex === 5) {
+                } else if (loadIndex === 5) {
                     currentGameApp = settingsApp;
                 }
             }
@@ -192,40 +229,72 @@ function updateCanvas(dt) {
 }
 
 function drawCanvas() {
-    // 1. Background
+    // 1. Background (Classic Switch dark mode)
     ctx.fillStyle = UI_BG;
     ctx.fillRect(0, 0, w, h);
 
     // Top separating line (subtle)
     ctx.fillStyle = 'rgba(255,255,255,0.1)';
     ctx.fillRect(40, 95, w - 80, 2);
-    ctx.fillRect(40, 560, w - 80, 2);
+    ctx.fillRect(40, h - 140, w - 80, 2); // Bottom separating line
+
+    // Live Clock
+    const now = new Date();
+    let hours = now.getHours();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12 || 12;
+    const minutes = now.getMinutes().toString().padStart(2, '0');
 
     // 2. Header Status Bar
     ctx.fillStyle = UI_TEXT;
-    ctx.font = '22px "Outfit", sans-serif';
+    ctx.font = '500 22px "Inter", sans-serif';
     ctx.textAlign = 'right';
-    ctx.fillText('12:00', w - 50, 50);
+    ctx.fillText(`${hours}:${minutes} ${ampm}`, w - 50, 50);
+
+    // Progression UI (XP Bar and Level - Switch Style)
+    const xp = Progress.xpProgress;
+    const barWidth = 200;
+    const barHeight = 12;
+    const barX = 140;
+    const barY = 32;
+
+    // Level Text
+    ctx.fillStyle = UI_TEXT;
+    ctx.font = '600 24px "Inter", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(`Lv. ${Progress.state.level}`, 70, 48);
+
+    // XP Bar Background
+    ctx.fillStyle = '#111';
+    drawRoundedRect(barX, barY, barWidth, barHeight, 6);
+    ctx.fill();
+
+    // XP Bar Fill
+    if (xp.percentage > 0) {
+        ctx.fillStyle = UI_ACCENT;
+        drawRoundedRect(barX, barY, barWidth * xp.percentage, barHeight, 6);
+        ctx.fill();
+    }
 
     // Profile Icon (Top Left)
     ctx.fillStyle = '#ef4444';
     ctx.beginPath();
-    ctx.arc(80, 50, 25, 0, Math.PI * 2);
+    ctx.arc(40, 40, 20, 0, Math.PI * 2);
     ctx.fill();
 
-    // 3. Game Title Text
+    // 3. Game Title Text (Dynamic active selection)
     ctx.fillStyle = UI_ACCENT; // Highlight color for selected
-    ctx.font = '32px "Outfit", sans-serif';
+    ctx.font = '600 32px "Inter", sans-serif';
     ctx.textAlign = 'left';
-    // Draw the active title dynamically based on selection
-    ctx.fillText(games[activeGameIndex].title, 60, 160);
+    ctx.fillText(games[activeGameIndex].title, 60, 150);
 
-    // 4. Draw Games Row
+    // 4. Central Carousel
     ctx.save();
-    ctx.translate(w / 2 - 130 + currentScrollX, 350); // Keep start offset centered
+    // Shift the row to be perfectly centered on screen vertically
+    ctx.translate(w / 2 - 130 + currentScrollX, h / 2 - 20);
 
     for (let i = 0; i < games.length; i++) {
-        const gameX = i * 320; // Increased Spacing (was 260)
+        const gameX = i * 320; // Increased spacing between games
         const scale = tileScales[i];
         const isSelected = i === activeGameIndex;
 
@@ -233,45 +302,95 @@ function drawCanvas() {
         ctx.translate(gameX, 0);
         ctx.scale(scale, scale);
 
-        const baseSize = 250;
+        const baseSize = 250; // Switch size
+        const cornerRadius = 12; // Classic hard rounded rectangle
 
-        // Shadow for all, bigger for active
+        // Switch neon shadow 
         ctx.shadowColor = 'rgba(0,0,0,0.4)';
         ctx.shadowBlur = isSelected ? 20 : 10;
         ctx.shadowOffsetY = isSelected ? 8 : 4;
 
-        // Draw tile background (fallback color)
+        // Draw tile background
         ctx.fillStyle = games[i].color;
-        drawRoundedRect(-baseSize / 2, -baseSize / 2, baseSize, baseSize, 12);
+        drawRoundedRect(-baseSize / 2, -baseSize / 2, baseSize, baseSize, cornerRadius);
         ctx.fill();
+
+        ctx.shadowColor = 'transparent'; // Remove shadow for inner elements
 
         // Draw Image if loaded successfully
         if (games[i].imageObj && games[i].imageObj.complete && games[i].imageObj.naturalWidth !== 0) {
             ctx.save();
-            ctx.clip(); // Clip to the rounded rect
+            drawRoundedRect(-baseSize / 2, -baseSize / 2, baseSize, baseSize, cornerRadius);
+            ctx.clip();
+
             ctx.drawImage(games[i].imageObj, -baseSize / 2, -baseSize / 2, baseSize, baseSize);
+
+            // Draw special text over Daily Challenge 
+            if (i === 2) {
+                const dailyMod = Daily.getDailyModifier();
+                ctx.fillStyle = 'rgba(0,0,0,0.85)'; // Dark banner
+                ctx.fillRect(-baseSize / 2, baseSize / 2 - 80, baseSize, 80);
+
+                ctx.fillStyle = '#fff';
+                ctx.textAlign = 'center';
+                ctx.font = '600 20px "Inter"';
+                ctx.fillText(dailyMod.name, 0, baseSize / 2 - 50);
+                if (Progress.isDailyCompleted()) {
+                    ctx.fillStyle = '#10b981';
+                    ctx.fillText("✓ COMPLETED", 0, baseSize / 2 - 20);
+                } else {
+                    ctx.fillStyle = '#eab308';
+                    ctx.fillText("READY!", 0, baseSize / 2 - 20);
+                }
+            }
             ctx.restore();
         } else {
-            // Text fallback for apps without images (like Settings)
-            ctx.fillStyle = '#fff';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
+            // Check if it's the settings app to draw a gear
+            if (games[i].title === "System Settings" || games[i].title === "Settings") {
+                ctx.save();
+                ctx.translate(0, 0); // Center of tile
 
-            // Break title into lines if it's long
-            const words = games[i].title.split(" ");
-            ctx.font = 'bold 32px "Outfit"';
-            if (words.length > 1) {
-                ctx.fillText(words[0], 0, -20);
-                ctx.fillText(words.slice(1).join(" "), 0, 20);
+                // Draw gear base
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(0, 0, 45, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Draw gear teeth
+                ctx.fillStyle = '#fff';
+                for (let t = 0; t < 8; t++) {
+                    ctx.save();
+                    ctx.rotate((Math.PI * 2 / 8) * t);
+                    ctx.fillRect(-12, -60, 24, 120);
+                    ctx.restore();
+                }
+
+                // Inner circle to cut out center
+                ctx.fillStyle = games[i].color; // Fill with background color
+                ctx.beginPath();
+                ctx.arc(0, 0, 25, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
             } else {
-                ctx.fillText(games[i].title, 0, 0);
+                // Text fallback for apps without images
+                ctx.fillStyle = '#fff';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+
+                // Break title into lines if it's long
+                const words = games[i].title.split(" ");
+                ctx.font = '700 32px "Inter"';
+                if (words.length > 1) {
+                    ctx.fillText(words[0], 0, -20);
+                    ctx.fillText(words.slice(1).join(" "), 0, 20);
+                } else {
+                    ctx.fillText(games[i].title, 0, 0);
+                }
             }
         }
 
-        // Remove shadow for the border
-        ctx.shadowColor = 'transparent';
-
-        // Glowing border for selected tile
+        // Switch glowing border for selected tile
         if (isSelected) {
             ctx.lineWidth = 6;
             ctx.strokeStyle = UI_ACCENT;
@@ -287,12 +406,11 @@ function drawCanvas() {
     }
     ctx.restore();
 
-    // 5. Bottom System Menu Row
-    const bottomY = 600;
+    // 5. Classic Bottom System Menu Row (Grey circles)
+    const bottomY = h - 90;
     const icons = ['News', 'eShop', 'Album', 'Controllers', 'System', 'Sleep'];
-    ctx.fillStyle = '#424242'; // Slightly lighter than bg
+    ctx.fillStyle = '#424242'; // Lighter grey circles
 
-    // Calculate total width to center
     const iconWidth = 60;
     const iconSpacing = 30;
     const totalMenuWidth = (icons.length * iconWidth) + ((icons.length - 1) * iconSpacing);
@@ -306,9 +424,36 @@ function drawCanvas() {
 
     // Bottom Controls Hint
     ctx.fillStyle = UI_TEXT;
-    ctx.font = '22px "Outfit", sans-serif';
+    ctx.font = '500 22px "Inter", sans-serif';
     ctx.textAlign = 'right';
     ctx.fillText('A  Start   ⌂  Home', w - 50, h - 40);
+
+    // 6. Draw Notification Toasts (Classic Switch slide-in)
+    if (activeToast) {
+        let toastY = 120;
+        let alpha = 1.0;
+        if (toastTimer < 0.5) alpha = toastTimer * 2;
+        if (toastTimer > 3.5) alpha = (4.0 - toastTimer) * 2;
+
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+        ctx.strokeStyle = UI_ACCENT;
+        ctx.lineWidth = 2;
+
+        ctx.font = '700 20px "Inter"';
+        const txtWidth = ctx.measureText(activeToast).width;
+
+        drawRoundedRect(w / 2 - txtWidth / 2 - 30, toastY, txtWidth + 60, 50, 25);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(activeToast, w / 2, toastY + 25);
+        ctx.restore();
+    }
 
     // 6. Game Opening Transition (Simulated Launch Splash / Built-in Native App)
     if (gameOverlayOpacity > 0) {
@@ -328,7 +473,7 @@ function drawCanvas() {
             ctx.fillStyle = (currentGameApp === settingsApp) ? '#2a2a2a' : '#fff';
             ctx.fillRect(0, 0, w, h);
             ctx.fillStyle = (currentGameApp === settingsApp) ? '#fff' : '#000';
-            ctx.font = 'bold 70px "Outfit"';
+            ctx.font = '700 70px "Inter"';
             ctx.textAlign = 'center';
             ctx.fillText(games[activeGameIndex].title, w / 2, h / 2);
             ctx.globalAlpha = 1;
@@ -394,7 +539,7 @@ function drawBootAnimation() {
         let textOp = Math.min(1, Math.max(0, (bootTime - 1.5) * 4));
         ctx.globalAlpha = overlayAlpha * textOp;
         ctx.fillStyle = '#fff';
-        ctx.font = 'bold 36px "Outfit"';
+        ctx.font = '600 36px "Inter"';
         ctx.textAlign = 'center';
         ctx.fillText('NINTENDO SWITCH', centerX, centerY + pillH / 2 + 60);
 
@@ -413,8 +558,29 @@ const tabletMat = new THREE.MeshStandardMaterial({ color: '#2a2a2a', roughness: 
 const bezelMat = new THREE.MeshStandardMaterial({ color: '#000000', roughness: 0.05, metalness: 0.8 });
 const joyconBlueMat = new THREE.MeshStandardMaterial({ color: '#00c3e3', roughness: 0.4, metalness: 0.1 }); // Exact Neon Blue
 const joyconRedMat = new THREE.MeshStandardMaterial({ color: '#ff4554', roughness: 0.4, metalness: 0.1 });  // Exact Neon Red
-const btnMat = new THREE.MeshStandardMaterial({ color: '#2b2b2b', roughness: 0.8, metalness: 0.1 });
-const stickMat = new THREE.MeshStandardMaterial({ color: '#1a1a1a', roughness: 0.9, metalness: 0.1 });
+const btnMat = new THREE.MeshStandardMaterial({ color: '#3a3a3a', roughness: 0.9, metalness: 0.0 }); // Solid matte plastic, bright enough to be visible
+const stickMat = new THREE.MeshStandardMaterial({ color: '#111111', roughness: 0.9, metalness: 0.1 });
+
+// Helper function to create text textures mapped onto buttons
+function createButtonLabel(text) {
+    const c = document.createElement('canvas');
+    c.width = 128;
+    c.height = 128;
+    const ctx = c.getContext('2d');
+
+    // Transparent background
+    ctx.clearRect(0, 0, 128, 128);
+
+    ctx.fillStyle = '#ffffff'; // White text
+    ctx.font = 'bold 80px "Inter", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, 64, 70); // Center text
+
+    const tex = new THREE.CanvasTexture(c);
+    tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    return new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.8 });
+}
 
 function createButton(geometry, material, x, y, z, actionLabel, parentGroup) {
     const btn = new THREE.Mesh(geometry, material);
@@ -434,18 +600,43 @@ const bodyGeo = new RoundedBoxGeometry(tabletW, tabletH, tabletD, 4, 0.2);
 const body = new THREE.Mesh(bodyGeo, tabletMat);
 switchGroup.add(body);
 
-// Screen Bezel (Glossy)
-const bezelGeo = new RoundedBoxGeometry(tabletW - 0.2, tabletH - 0.2, tabletD + 0.02, 4, 0.2);
+// Screen Bezel (Glossy) - uniform border
+const bezelGeo = new RoundedBoxGeometry(tabletW - 0.1, tabletH - 0.1, tabletD + 0.02, 4, 0.15);
 const bezel = new THREE.Mesh(bezelGeo, bezelMat);
 switchGroup.add(bezel);
 
-// 16:9 Screen (Plane with Canvas Texture)
-const screenW = 6.4;
-const screenH = 3.6;
-const screenGeo = new THREE.PlaneGeometry(screenW, screenH);
+// 16:9 Screen - 0.3 uniform bezel on all sides, with soft rounded corners
+const screenW = tabletW - 0.6;   // 0.3 gap each side (left + right)
+const screenH = tabletH - 0.6;   // 0.3 gap top/bottom
+const screenCornerR = 0.2;        // corner rounding radius
+
+// Build a rounded-rect shape for the screen
+const screenShape = new THREE.Shape();
+const sW2 = screenW / 2;
+const sH2 = screenH / 2;
+screenShape.moveTo(-sW2 + screenCornerR, -sH2);
+screenShape.lineTo(sW2 - screenCornerR, -sH2);
+screenShape.quadraticCurveTo(sW2, -sH2, sW2, -sH2 + screenCornerR);
+screenShape.lineTo(sW2, sH2 - screenCornerR);
+screenShape.quadraticCurveTo(sW2, sH2, sW2 - screenCornerR, sH2);
+screenShape.lineTo(-sW2 + screenCornerR, sH2);
+screenShape.quadraticCurveTo(-sW2, sH2, -sW2, sH2 - screenCornerR);
+screenShape.lineTo(-sW2, -sH2 + screenCornerR);
+screenShape.quadraticCurveTo(-sW2, -sH2, -sW2 + screenCornerR, -sH2);
+
+const screenGeo = new THREE.ShapeGeometry(screenShape, 16);
+
+// Remap UVs so the texture fills the shape correctly
+const _pos = screenGeo.attributes.position;
+const _uvArr = [];
+for (let i = 0; i < _pos.count; i++) {
+    _uvArr.push((_pos.getX(i) + sW2) / screenW, (_pos.getY(i) + sH2) / screenH);
+}
+screenGeo.setAttribute('uv', new THREE.Float32BufferAttribute(_uvArr, 2));
+
 const screenMat = new THREE.MeshBasicMaterial({ map: screenTexture });
 const screenMesh = new THREE.Mesh(screenGeo, screenMat);
-screenMesh.position.set(0, 0, (tabletD / 2) + 0.015); // Just barely atop the bezel
+screenMesh.position.set(0, 0, (tabletD / 2) + 0.016);
 switchGroup.add(screenMesh);
 
 
@@ -492,7 +683,7 @@ const leftOffset = -(tabletW / 2) - (jcWidth / 2) - 0.01;
 leftJcGroup.position.set(leftOffset, 0, 0);
 switchGroup.add(leftJcGroup);
 
-const leftJcMesh = new THREE.Mesh(jcExtGeo, joyconBlueMat);
+const leftJcMesh = new THREE.Mesh(jcExtGeo, joyconBlueMat); // Swapped back to Blue
 // We don't need to rotate because we center()
 leftJcGroup.add(leftJcMesh);
 
@@ -529,35 +720,47 @@ const zlBtn = createButton(zlGeo, btnMat, -0.05, jcH / 2 + 0.02, -0.15, 'zl_trig
 zlBtn.rotation.x = -Math.PI / 12; // Slant backward
 
 
-// L-Stick
-const stickBaseGeo = new THREE.CylinderGeometry(0.22, 0.28, 0.05, 32);
+// L-Stick (High Fidelity with 3D Torus Rim)
+const stickRimGeo = new THREE.TorusGeometry(0.2, 0.06, 16, 32);
+stickRimGeo.translate(0, 0, 0.1);
+
+const stickBaseGeo = new THREE.CylinderGeometry(0.20, 0.26, 0.15, 32);
 stickBaseGeo.rotateX(Math.PI / 2);
-const stickTopGeo = new THREE.CylinderGeometry(0.23, 0.23, 0.04, 32);
-stickTopGeo.rotateX(Math.PI / 2);
-stickTopGeo.translate(0, 0, 0.05);
+
+const stickCapGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.05, 32);
+stickCapGeo.rotateX(Math.PI / 2);
+stickCapGeo.translate(0, 0, 0.08);
 
 const leftStick = new THREE.Group();
 leftStick.add(new THREE.Mesh(stickBaseGeo, stickMat));
-leftStick.add(new THREE.Mesh(stickTopGeo, stickMat));
-leftStick.position.set(0, 1.0, (tabletD / 2) + 0.02);
+leftStick.add(new THREE.Mesh(stickRimGeo, stickMat));
+leftStick.add(new THREE.Mesh(stickCapGeo, stickMat));
+leftStick.position.set(0, 1.0, 0.35);
 leftJcGroup.add(leftStick);
 
-// D-Pad Directional Buttons
-const arrowBtnGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.06, 32);
+// D-Pad Configuration Action Buttons (Robust Chamfered Cylinders)
+const arrowBtnGeo = new THREE.CylinderGeometry(0.10, 0.11, 0.06, 32);
 arrowBtnGeo.rotateX(Math.PI / 2);
-const btnZ = (tabletD / 2) + 0.03;
+// The JoyCon extrude + bevel pushes the front face to ~Z=0.30.
+// Setting btnZ=0.35 ensures all buttons clearly protrude beyond that.
+const btnZ = 0.35;
 
-createButton(arrowBtnGeo, btnMat, 0.05, -0.2, btnZ, 'up', leftJcGroup);
-createButton(arrowBtnGeo, btnMat, 0.05, -0.8, btnZ, 'down', leftJcGroup);
-createButton(arrowBtnGeo, btnMat, -0.25, -0.5, btnZ, 'left', leftJcGroup);
-createButton(arrowBtnGeo, btnMat, 0.35, -0.5, btnZ, 'right', leftJcGroup);
+// Tighter cross alignment for left Joy-Con D-Pad
+const dPadCenterY = -0.55;
+const dPadOffsetX = -0.05;
+const dPadSpacing = 0.28;
 
-// Minus Button
-const minusGeo = new THREE.BoxGeometry(0.12, 0.04, 0.06);
+createButton(arrowBtnGeo, btnMat, dPadOffsetX, dPadCenterY + dPadSpacing, btnZ, 'up', leftJcGroup);
+createButton(arrowBtnGeo, btnMat, dPadOffsetX, dPadCenterY - dPadSpacing, btnZ, 'down', leftJcGroup);
+createButton(arrowBtnGeo, btnMat, dPadOffsetX - dPadSpacing, dPadCenterY, btnZ, 'left', leftJcGroup);
+createButton(arrowBtnGeo, btnMat, dPadOffsetX + dPadSpacing, dPadCenterY, btnZ, 'right', leftJcGroup);
+
+// Minus Button (Rounded Box)
+const minusGeo = new RoundedBoxGeometry(0.12, 0.04, 0.04, 2, 0.015);
 createButton(minusGeo, btnMat, 0.25, 1.7, btnZ, 'minus', leftJcGroup);
 
-// Capture Button
-const captureGeo = new THREE.BoxGeometry(0.14, 0.14, 0.04);
+// Capture Button (Rounded Sq)
+const captureGeo = new RoundedBoxGeometry(0.14, 0.14, 0.04, 2, 0.02);
 const captureBtn = createButton(captureGeo, btnMat, 0.15, -1.4, btnZ, 'capture', leftJcGroup);
 // Capture indent
 const captureIndentGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.02, 16);
@@ -577,7 +780,7 @@ const rightJcShape = createJoyConShape(jcWidth, jcH - 0.1, 0.4);
 const jcExtGeoR = new THREE.ExtrudeGeometry(rightJcShape, extrudeSettings);
 jcExtGeoR.center();
 
-const rightJcMesh = new THREE.Mesh(jcExtGeoR, joyconRedMat);
+const rightJcMesh = new THREE.Mesh(jcExtGeoR, joyconRedMat); // Swapped back to Red
 // Flip it for the right side
 rightJcMesh.rotation.y = Math.PI;
 rightJcGroup.add(rightJcMesh);
@@ -598,33 +801,64 @@ zrBtn.rotation.x = -Math.PI / 12;
 
 // R-Stick
 const rightStick = leftStick.clone();
-rightStick.position.set(-0.05, -0.7, (tabletD / 2) + 0.02);
+rightStick.position.set(-0.05, -0.7, 0.35);
 rightJcGroup.add(rightStick);
 
-// ABXY Buttons
-createButton(arrowBtnGeo, btnMat, -0.05, 1.2, btnZ, 'x', rightJcGroup);
-createButton(arrowBtnGeo, btnMat, -0.05, 0.6, btnZ, 'b', rightJcGroup);
-createButton(arrowBtnGeo, btnMat, -0.35, 0.9, btnZ, 'y', rightJcGroup);
-createButton(arrowBtnGeo, btnMat, 0.25, 0.9, btnZ, 'a', rightJcGroup);
+// ABXY Buttons (Flatter depth)
+const abxyCenterY = 0.9;
+const abxyOffsetX = -0.05;
 
-// Plus Button 
-const plusGeoV = new THREE.BoxGeometry(0.04, 0.12, 0.06);
-const plusGeoH = new THREE.BoxGeometry(0.12, 0.04, 0.06);
+function addLabeledButton(x, y, label, action) {
+    const btn = createButton(arrowBtnGeo, btnMat, x, y, btnZ, action, rightJcGroup);
+
+    // Add text decal
+    const decalMat = createButtonLabel(label);
+    const decalGeo = new THREE.PlaneGeometry(0.14, 0.14);
+    const decal = new THREE.Mesh(decalGeo, decalMat);
+    decal.position.z = 0.031; // Just above the button top face
+    btn.add(decal);
+
+    return btn;
+}
+
+addLabeledButton(abxyOffsetX, abxyCenterY + dPadSpacing, 'X', 'x');
+addLabeledButton(abxyOffsetX, abxyCenterY - dPadSpacing, 'B', 'b');
+addLabeledButton(abxyOffsetX - dPadSpacing, abxyCenterY, 'Y', 'y');
+addLabeledButton(abxyOffsetX + dPadSpacing, abxyCenterY, 'A', 'a');
+
+// Plus Button (Extruded Cross for true 3D properties)
+const plusShape = new THREE.Shape();
+const t = 0.025;
+const l = 0.07;
+plusShape.moveTo(-t, -l); plusShape.lineTo(t, -l);
+plusShape.lineTo(t, -t); plusShape.lineTo(l, -t);
+plusShape.lineTo(l, t); plusShape.lineTo(t, t);
+plusShape.lineTo(t, l); plusShape.lineTo(-t, l);
+plusShape.lineTo(-t, t); plusShape.lineTo(-l, t);
+plusShape.lineTo(-l, -t); plusShape.lineTo(-t, -t);
+plusShape.lineTo(-t, -l);
+
+const plusGeo = new THREE.ExtrudeGeometry(plusShape, { depth: 0.04, bevelEnabled: true, bevelThickness: 0.01, bevelSize: 0.01, bevelSegments: 2 });
+plusGeo.center();
+
 const plusGroup = new THREE.Group();
-plusGroup.add(new THREE.Mesh(plusGeoV, btnMat));
-plusGroup.add(new THREE.Mesh(plusGeoH, btnMat));
+plusGroup.add(new THREE.Mesh(plusGeo, btnMat));
 
 const plusHitGeo = new THREE.BoxGeometry(0.2, 0.2, 0.06);
 const plusHit = createButton(plusHitGeo, new THREE.MeshBasicMaterial({ visible: false }), -0.25, 1.7, btnZ, 'plus', rightJcGroup);
 plusHit.add(plusGroup);
 
-// Home Button
-const homeGeo = new THREE.CylinderGeometry(0.14, 0.14, 0.04, 32);
-homeGeo.rotateX(Math.PI / 2);
+// Home Button (Beveled Circle)
+const homeShape = new THREE.Shape();
+homeShape.absarc(0, 0, 0.14, 0, Math.PI * 2, false);
+const homeGeo = new THREE.ExtrudeGeometry(homeShape, { depth: 0.03, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.015, bevelSegments: 3, curveSegments: 24 });
+homeGeo.center();
 const homeBtn = createButton(homeGeo, btnMat, -0.15, -1.3, btnZ, 'home', rightJcGroup);
-const homeOutlineGeo = new THREE.RingGeometry(0.1, 0.12, 32);
-const homeOutline = new THREE.Mesh(homeOutlineGeo, new THREE.MeshBasicMaterial({ color: 0x555555, side: THREE.DoubleSide }));
-homeOutline.position.z = 0.021;
+
+// Grey inner ring for aesthetic
+const homeOutlineGeo = new THREE.RingGeometry(0.10, 0.12, 32);
+const homeOutline = new THREE.Mesh(homeOutlineGeo, new THREE.MeshStandardMaterial({ color: 0x444444, side: THREE.DoubleSide }));
+homeOutline.position.z = 0.025;
 homeBtn.add(homeOutline);
 
 
@@ -746,9 +980,14 @@ window.addEventListener('keydown', onKeyDown);
 
 // Hook settings changing
 settingsApp.onThemeChange = (newTheme) => {
-    joyconBlueMat.color.set(newTheme.left);
-    joyconRedMat.color.set(newTheme.right);
+    joyconBlueMat.color.set(newTheme.left); // Left Joy-Con mesh
+    joyconRedMat.color.set(newTheme.right); // Right Joy-Con mesh
 };
+
+// Always force the Neon theme on load to fix stale localStorage issue
+// (Left=Blue, Right=Red is the classic Nintendo default)
+joyconBlueMat.color.set('#00c3e3');
+joyconRedMat.color.set('#ff4554');
 
 // --- 6. Animation Loop ---
 const clock = new THREE.Clock();
@@ -759,6 +998,7 @@ function animate() {
 
     updateCanvas(dt);
     drawCanvas();
+    drawBootAnimation(); // Fixed! The boot splash is drawn on top of the OS while booting
     screenTexture.needsUpdate = true;
 
     controls.update();
