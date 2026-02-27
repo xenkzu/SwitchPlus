@@ -69,9 +69,9 @@ const gridH = Math.floor(h / gridSize);
 // Game State / UI State
 let activeGameIndex = 0;
 const games = [
-    { title: "Snake", color: "#10b981", img: "snake.png" },
-    { title: "Pong", color: "#b91c1c", img: "pong.png" },
-    { title: "Daily Challenge", color: "#eab308", img: "daily.png" }, // New generic daily app tile
+    { title: "Snake", color: "#10b981", img: "public/snake.png" },
+    { title: "Pong", color: "#b91c1c", img: "public/pong.png" },
+    { title: "Daily Challenge", color: "#eab308", img: "public/daily.png" }, // New generic daily app tile
     { title: "Mario Kart 8 Deluxe", color: "#047857", img: "https://upload.wikimedia.org/wikipedia/en/b/b5/MarioKart8Boxart.jpg" },
     { title: "Super Smash Bros", color: "#4c1d95", img: "https://upload.wikimedia.org/wikipedia/en/5/50/Super_Smash_Bros._Ultimate.jpg" },
     { title: "System Settings", color: "#2a2a2a", img: "" }
