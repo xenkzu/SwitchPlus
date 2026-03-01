@@ -558,8 +558,9 @@ const tabletMat = new THREE.MeshStandardMaterial({ color: '#2a2a2a', roughness: 
 const bezelMat = new THREE.MeshStandardMaterial({ color: '#000000', roughness: 0.05, metalness: 0.8 });
 const joyconBlueMat = new THREE.MeshStandardMaterial({ color: '#00c3e3', roughness: 0.4, metalness: 0.1 }); // Exact Neon Blue
 const joyconRedMat = new THREE.MeshStandardMaterial({ color: '#ff4554', roughness: 0.4, metalness: 0.1 });  // Exact Neon Red
-const btnMat = new THREE.MeshStandardMaterial({ color: '#3a3a3a', roughness: 0.9, metalness: 0.0 }); // Solid matte plastic, bright enough to be visible
-const stickMat = new THREE.MeshStandardMaterial({ color: '#111111', roughness: 0.9, metalness: 0.1 });
+const btnMat = new THREE.MeshStandardMaterial({ color: '#1a1a1a', roughness: 0.95, metalness: 0.05 }); // Same dark material as joysticks
+const stickMat = btnMat; // All buttons share the same material
+const stickCapMat = new THREE.MeshStandardMaterial({ color: '#0d0d0d', roughness: 1.0, metalness: 0.0 }); // Rubber grip top
 
 // Helper function to create text textures mapped onto buttons
 function createButtonLabel(text) {
@@ -720,54 +721,55 @@ const zlBtn = createButton(zlGeo, btnMat, -0.05, jcH / 2 + 0.02, -0.15, 'zl_trig
 zlBtn.rotation.x = -Math.PI / 12; // Slant backward
 
 
-// L-Stick (High Fidelity with 3D Torus Rim)
-const stickRimGeo = new THREE.TorusGeometry(0.2, 0.06, 16, 32);
-stickRimGeo.translate(0, 0, 0.1);
-
-const stickBaseGeo = new THREE.CylinderGeometry(0.20, 0.26, 0.15, 32);
+// L-Stick (Clean analog stick - matches reference) - Increased by 20%
+const stickBaseGeo = new THREE.CylinderGeometry(0.24, 0.31, 0.14, 32);
 stickBaseGeo.rotateX(Math.PI / 2);
 
-const stickCapGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.05, 32);
+const stickCapGeo = new THREE.CylinderGeometry(0.25, 0.25, 0.04, 32);
 stickCapGeo.rotateX(Math.PI / 2);
 stickCapGeo.translate(0, 0, 0.08);
 
+const stickRimGeo = new THREE.TorusGeometry(0.23, 0.036, 12, 32);
+stickRimGeo.translate(0, 0, 0.09);
+
 const leftStick = new THREE.Group();
-leftStick.add(new THREE.Mesh(stickBaseGeo, stickMat));
-leftStick.add(new THREE.Mesh(stickRimGeo, stickMat));
-leftStick.add(new THREE.Mesh(stickCapGeo, stickMat));
+leftStick.add(new THREE.Mesh(stickBaseGeo, btnMat));
+leftStick.add(new THREE.Mesh(stickCapGeo, stickCapMat));
+leftStick.add(new THREE.Mesh(stickRimGeo, stickCapMat));
 leftStick.position.set(0, 1.0, 0.35);
 leftJcGroup.add(leftStick);
 
-// D-Pad Configuration Action Buttons (Robust Chamfered Cylinders)
-const arrowBtnGeo = new THREE.CylinderGeometry(0.10, 0.11, 0.06, 32);
-arrowBtnGeo.rotateX(Math.PI / 2);
-// The JoyCon extrude + bevel pushes the front face to ~Z=0.30.
-// Setting btnZ=0.35 ensures all buttons clearly protrude beyond that.
 const btnZ = 0.35;
 
-// Tighter cross alignment for left Joy-Con D-Pad
+// --- D-Pad: 4 separate circular buttons, aligned below the joystick ---
+// Aligned on X=0 to match the joystick center
+const dPadCenterX = 0;
 const dPadCenterY = -0.55;
-const dPadOffsetX = -0.05;
-const dPadSpacing = 0.28;
+const dPadSpacing = 0.29; // Increased spacing by ~20%
 
-createButton(arrowBtnGeo, btnMat, dPadOffsetX, dPadCenterY + dPadSpacing, btnZ, 'up', leftJcGroup);
-createButton(arrowBtnGeo, btnMat, dPadOffsetX, dPadCenterY - dPadSpacing, btnZ, 'down', leftJcGroup);
-createButton(arrowBtnGeo, btnMat, dPadOffsetX - dPadSpacing, dPadCenterY, btnZ, 'left', leftJcGroup);
-createButton(arrowBtnGeo, btnMat, dPadOffsetX + dPadSpacing, dPadCenterY, btnZ, 'right', leftJcGroup);
+// Increased button radius by 20% (0.09 -> 0.11)
+const dpadBtnGeo = new THREE.CylinderGeometry(0.108, 0.12, 0.05, 32);
+dpadBtnGeo.rotateX(Math.PI / 2);
 
-// Minus Button (Rounded Box)
-const minusGeo = new RoundedBoxGeometry(0.12, 0.04, 0.04, 2, 0.015);
-createButton(minusGeo, btnMat, 0.25, 1.7, btnZ, 'minus', leftJcGroup);
+createButton(dpadBtnGeo, btnMat, dPadCenterX, dPadCenterY + dPadSpacing, btnZ, 'up', leftJcGroup);
+createButton(dpadBtnGeo, btnMat, dPadCenterX, dPadCenterY - dPadSpacing, btnZ, 'down', leftJcGroup);
+createButton(dpadBtnGeo, btnMat, dPadCenterX - dPadSpacing, dPadCenterY, btnZ, 'left', leftJcGroup);
+createButton(dpadBtnGeo, btnMat, dPadCenterX + dPadSpacing, dPadCenterY, btnZ, 'right', leftJcGroup);
 
-// Capture Button (Rounded Sq)
-const captureGeo = new RoundedBoxGeometry(0.14, 0.14, 0.04, 2, 0.02);
-const captureBtn = createButton(captureGeo, btnMat, 0.15, -1.4, btnZ, 'capture', leftJcGroup);
-// Capture indent
-const captureIndentGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.02, 16);
-captureIndentGeo.rotateX(Math.PI / 2);
-const captureIndent = new THREE.Mesh(captureIndentGeo, new THREE.MeshBasicMaterial({ color: 0x000000 }));
-captureIndent.position.z = 0.02;
-captureBtn.add(captureIndent);
+// Minus Button — Hardware accurate "-" shape, toward the screen
+const minusShape = new THREE.Shape();
+const mw = 0.07;
+const mh = 0.02;
+minusShape.moveTo(-mw, -mh); minusShape.lineTo(mw, -mh);
+minusShape.lineTo(mw, mh); minusShape.lineTo(-mw, mh);
+minusShape.lineTo(-mw, -mh);
+const minusGeo = new THREE.ExtrudeGeometry(minusShape, { depth: 0.03, bevelEnabled: true, bevelThickness: 0.005, bevelSize: 0.005, bevelSegments: 2 });
+minusGeo.center();
+createButton(minusGeo, btnMat, 0.45, 1.6, btnZ, 'minus', leftJcGroup);
+
+// Capture Button (small rounded square, lower area)
+const captureGeo = new RoundedBoxGeometry(0.12, 0.12, 0.04, 2, 0.02);
+createButton(captureGeo, btnMat, 0.15, -1.4, btnZ, 'capture', leftJcGroup);
 
 
 // Right Joy-Con (Neon Red)
@@ -799,67 +801,57 @@ const zrBtn = createButton(zrGeo, btnMat, 0.05, jcH / 2 + 0.02, -0.15, 'zr_trigg
 zrBtn.rotation.y = Math.PI;
 zrBtn.rotation.x = -Math.PI / 12;
 
-// R-Stick
+// R-Stick (clone of Left)
 const rightStick = leftStick.clone();
-rightStick.position.set(-0.05, -0.7, 0.35);
+rightStick.position.set(0, -0.7, 0.35);
 rightJcGroup.add(rightStick);
 
-// ABXY Buttons (Flatter depth)
+// --- ABXY Buttons (4 separate circles, same dark material, with letter labels) ---
 const abxyCenterY = 0.9;
-const abxyOffsetX = -0.05;
+const abxyCenterX = 0;
+const abxySpacing = 0.29; // Increased spacing by ~20%
+
+// Increased button radius by 20% (0.09 -> 0.11)
+const abxyBtnGeo = new THREE.CylinderGeometry(0.108, 0.12, 0.05, 32);
+abxyBtnGeo.rotateX(Math.PI / 2);
 
 function addLabeledButton(x, y, label, action) {
-    const btn = createButton(arrowBtnGeo, btnMat, x, y, btnZ, action, rightJcGroup);
+    const btn = createButton(abxyBtnGeo, btnMat, x, y, btnZ, action, rightJcGroup);
 
-    // Add text decal
+    // White letter on top (scale up slightly)
     const decalMat = createButtonLabel(label);
-    const decalGeo = new THREE.PlaneGeometry(0.14, 0.14);
+    const decalGeo = new THREE.PlaneGeometry(0.144, 0.144);
     const decal = new THREE.Mesh(decalGeo, decalMat);
-    decal.position.z = 0.031; // Just above the button top face
+    decal.position.z = 0.026;
     btn.add(decal);
 
     return btn;
 }
 
-addLabeledButton(abxyOffsetX, abxyCenterY + dPadSpacing, 'X', 'x');
-addLabeledButton(abxyOffsetX, abxyCenterY - dPadSpacing, 'B', 'b');
-addLabeledButton(abxyOffsetX - dPadSpacing, abxyCenterY, 'Y', 'y');
-addLabeledButton(abxyOffsetX + dPadSpacing, abxyCenterY, 'A', 'a');
+addLabeledButton(abxyCenterX, abxyCenterY + abxySpacing, 'X', 'x');
+addLabeledButton(abxyCenterX, abxyCenterY - abxySpacing, 'B', 'b');
+addLabeledButton(abxyCenterX - abxySpacing, abxyCenterY, 'Y', 'y');
+addLabeledButton(abxyCenterX + abxySpacing, abxyCenterY, 'A', 'a');
 
-// Plus Button (Extruded Cross for true 3D properties)
+// Plus Button — Hardware accurate "+" shape, toward the screen
 const plusShape = new THREE.Shape();
-const t = 0.025;
-const l = 0.07;
-plusShape.moveTo(-t, -l); plusShape.lineTo(t, -l);
-plusShape.lineTo(t, -t); plusShape.lineTo(l, -t);
-plusShape.lineTo(l, t); plusShape.lineTo(t, t);
-plusShape.lineTo(t, l); plusShape.lineTo(-t, l);
-plusShape.lineTo(-t, t); plusShape.lineTo(-l, t);
-plusShape.lineTo(-l, -t); plusShape.lineTo(-t, -t);
-plusShape.lineTo(-t, -l);
-
-const plusGeo = new THREE.ExtrudeGeometry(plusShape, { depth: 0.04, bevelEnabled: true, bevelThickness: 0.01, bevelSize: 0.01, bevelSegments: 2 });
+const pw = 0.07;
+const pt = 0.02; // Thickness
+plusShape.moveTo(-pt, -pw); plusShape.lineTo(pt, -pw);
+plusShape.lineTo(pt, -pt); plusShape.lineTo(pw, -pt);
+plusShape.lineTo(pw, pt); plusShape.lineTo(pt, pt);
+plusShape.lineTo(pt, pw); plusShape.lineTo(-pt, pw);
+plusShape.lineTo(-pt, pt); plusShape.lineTo(-pw, pt);
+plusShape.lineTo(-pw, -pt); plusShape.lineTo(-pt, -pt);
+plusShape.lineTo(-pt, -pw);
+const plusGeo = new THREE.ExtrudeGeometry(plusShape, { depth: 0.03, bevelEnabled: true, bevelThickness: 0.005, bevelSize: 0.005, bevelSegments: 2 });
 plusGeo.center();
+createButton(plusGeo, btnMat, -0.45, 1.6, btnZ, 'plus', rightJcGroup);
 
-const plusGroup = new THREE.Group();
-plusGroup.add(new THREE.Mesh(plusGeo, btnMat));
-
-const plusHitGeo = new THREE.BoxGeometry(0.2, 0.2, 0.06);
-const plusHit = createButton(plusHitGeo, new THREE.MeshBasicMaterial({ visible: false }), -0.25, 1.7, btnZ, 'plus', rightJcGroup);
-plusHit.add(plusGroup);
-
-// Home Button (Beveled Circle)
-const homeShape = new THREE.Shape();
-homeShape.absarc(0, 0, 0.14, 0, Math.PI * 2, false);
-const homeGeo = new THREE.ExtrudeGeometry(homeShape, { depth: 0.03, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.015, bevelSegments: 3, curveSegments: 24 });
-homeGeo.center();
-const homeBtn = createButton(homeGeo, btnMat, -0.15, -1.3, btnZ, 'home', rightJcGroup);
-
-// Grey inner ring for aesthetic
-const homeOutlineGeo = new THREE.RingGeometry(0.10, 0.12, 32);
-const homeOutline = new THREE.Mesh(homeOutlineGeo, new THREE.MeshStandardMaterial({ color: 0x444444, side: THREE.DoubleSide }));
-homeOutline.position.z = 0.025;
-homeBtn.add(homeOutline);
+// Home Button (small circle, lower area)
+const homeBtnGeo = new THREE.CylinderGeometry(0.10, 0.11, 0.04, 32);
+homeBtnGeo.rotateX(Math.PI / 2);
+createButton(homeBtnGeo, btnMat, -0.15, -1.3, btnZ, 'home', rightJcGroup);
 
 
 // Initial presentation angle
