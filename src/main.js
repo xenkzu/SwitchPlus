@@ -6,6 +6,8 @@ import { PongApp } from './apps/pong.js';
 import { SettingsApp } from './apps/settings.js';
 import { Progress } from './apps/progress.js';
 import { Daily } from './apps/daily.js';
+import { Achievements } from './apps/achievements.js';
+import { GBAApp } from './apps/gba.js';
 
 // --- 1. Scene Setup & Aesthetics ---
 const container = document.getElementById('scene-container');
@@ -69,10 +71,10 @@ const gridH = Math.floor(h / gridSize);
 // Game State / UI State
 let activeGameIndex = 0;
 const games = [
-    { title: "Snake", color: "#10b981", img: "public/snake.png" },
-    { title: "Pong", color: "#b91c1c", img: "public/pong.png" },
-    { title: "Daily Challenge", color: "#eab308", img: "public/daily.png" }, // New generic daily app tile
-    { title: "Mario Kart 8 Deluxe", color: "#047857", img: "https://upload.wikimedia.org/wikipedia/en/b/b5/MarioKart8Boxart.jpg" },
+    { title: "Snake", color: "#10b981", img: "assets/snake.png" },
+    { title: "Pong", color: "#b91c1c", img: "assets/pong.png" },
+    { title: "Daily Challenge", color: "#eab308", img: "assets/daily.png" }, // New generic daily app tile
+    { title: "Game Boy Advance", color: "#ef4444", img: "https://upload.wikimedia.org/wikipedia/en/9/9f/Pokemon_FireRed_Box_Art.jpg" }, // Live GBA Emulator
     { title: "Super Smash Bros", color: "#4c1d95", img: "https://upload.wikimedia.org/wikipedia/en/5/50/Super_Smash_Bros._Ultimate.jpg" },
     { title: "System Settings", color: "#2a2a2a", img: "" }
 ];
@@ -103,7 +105,15 @@ let currentGameApp = null; // 'snake' or 'pong' or 'settings'
 // Native Modules
 const snakeApp = new SnakeApp(gridW, gridH, gridSize);
 const pongApp = new PongApp(gridW, gridH, gridSize);
+const gbaApp = new GBAApp();
 const settingsApp = new SettingsApp();
+
+// Wire up global Hard Mode toggle
+settingsApp.onHardModeToggle = (isEnabled) => {
+    snakeApp.isHardMode = isEnabled;
+    pongApp.isHardMode = isEnabled;
+    toastQueue.push(`Hard Mode ${isEnabled ? 'Enabled 🔥' : 'Disabled'}`);
+};
 
 // Toast notification state
 let toastQueue = [];
@@ -111,7 +121,129 @@ let activeToast = null;
 let toastTimer = 0;
 
 window.addEventListener('switchplus_unlocked', (e) => {
-    toastQueue.push(`Achievement Unlocked! ${e.detail}`);
+    toastQueue.push(`Feature Unlocked! ${e.detail}`);
+});
+
+// --- Achievements UI (Global DOM Popup) ---
+const achievementContainer = document.getElementById('achievement-container');
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+// --- Save Slot UI (Global DOM Popup) ---
+const saveOverlay = document.createElement('div');
+saveOverlay.id = 'save-overlay';
+saveOverlay.innerHTML = `
+    <div style="position: fixed; top:0; left:0; width:100vw; height:100vh; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 2000; font-family: 'Inter', sans-serif;">
+        <h1 style="color: white; margin-bottom: 30px; font-size: 32px; font-weight: 700;">Select Save Slot</h1>
+        <div style="display: flex; gap: 20px;">
+            <button id="slot1-btn" class="save-slot-btn" style="padding: 20px 40px; font-size: 20px; font-weight: 600; border-radius: 12px; border: 2px solid #555; background: #222; color: #fff; cursor: pointer; transition: all 0.2s;">Slot 1</button>
+            <button id="slot2-btn" class="save-slot-btn" style="padding: 20px 40px; font-size: 20px; font-weight: 600; border-radius: 12px; border: 2px solid #555; background: #222; color: #fff; cursor: pointer; transition: all 0.2s;">Slot 2</button>
+            <button id="slot3-btn" class="save-slot-btn" style="padding: 20px 40px; font-size: 20px; font-weight: 600; border-radius: 12px; border: 2px solid #555; background: #222; color: #fff; cursor: pointer; transition: all 0.2s;">Slot 3</button>
+        </div>
+        <p style="color: #aaa; margin-top: 24px; font-size: 16px;">Note: Changing slots will restart the emulator.</p>
+        <button id="close-save-btn" style="margin-top: 40px; padding: 12px 36px; font-size: 18px; font-weight: 600; border-radius: 8px; border: none; background: #ef4444; color: white; cursor: pointer; transition: background 0.2s;">Resume (Press -)</button>
+    </div>
+`;
+saveOverlay.style.display = 'none';
+document.body.appendChild(saveOverlay);
+
+let isSaveMenuOpen = false;
+
+function toggleSaveMenu() {
+    isSaveMenuOpen = !isSaveMenuOpen;
+    saveOverlay.style.display = isSaveMenuOpen ? 'flex' : 'none';
+
+    // Highlight active slot
+    ['1', '2', '3'].forEach(num => {
+        const btn = document.getElementById(`slot${num}-btn`);
+        if (`Slot ${num}` === gbaApp.currentSlot) {
+            btn.style.borderColor = '#0ab9e6';
+            btn.style.boxShadow = '0 0 15px rgba(10, 185, 230, 0.4)';
+        } else {
+            btn.style.borderColor = '#555';
+            btn.style.boxShadow = 'none';
+        }
+    });
+
+    if (isSaveMenuOpen) {
+        gbaApp.gba.pause();
+    } else {
+        gbaApp.gba.runStable();
+    }
+}
+
+function selectSlot(slotName) {
+    if (gbaApp.currentSlot === slotName) return; // Ignore if already selected
+    gbaApp.currentSlot = slotName;
+    toggleSaveMenu();
+    gbaApp.boot();
+}
+
+// Add event listeners once DOM is inserted
+setTimeout(() => {
+    document.getElementById('slot1-btn').onclick = () => selectSlot('Slot 1');
+    document.getElementById('slot2-btn').onclick = () => selectSlot('Slot 2');
+    document.getElementById('slot3-btn').onclick = () => selectSlot('Slot 3');
+    document.getElementById('close-save-btn').onclick = () => toggleSaveMenu();
+
+    // Hover effects
+    document.querySelectorAll('.save-slot-btn').forEach(btn => {
+        btn.addEventListener('mouseenter', e => { if (e.target.style.borderColor === 'rgb(85, 85, 85)') e.target.style.borderColor = '#888'; });
+        btn.addEventListener('mouseleave', e => { if (e.target.style.borderColor === 'rgb(136, 136, 136)') e.target.style.borderColor = '#555'; });
+    });
+    document.getElementById('close-save-btn').addEventListener('mouseenter', e => e.target.style.background = '#dc2626');
+    document.getElementById('close-save-btn').addEventListener('mouseleave', e => e.target.style.background = '#ef4444');
+}, 100);
+
+function playAchievementSound() {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    // Bright synthetic chime (C6 -> E6 chord feel)
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1046.50, audioCtx.currentTime); // C6
+    osc.frequency.exponentialRampToValueAtTime(1318.51, audioCtx.currentTime + 0.1); // E6
+
+    gain.gain.setValueAtTime(0, audioCtx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + 0.05); // Attack
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5); // Decay
+
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + 0.5);
+}
+
+window.addEventListener('switchplus_achievement_unlocked', (e) => {
+    const achievement = e.detail;
+
+    const el = document.createElement('div');
+    el.className = 'achievement-toast';
+    el.innerHTML = `
+        <div class="achievement-icon">${achievement.icon}</div>
+        <div class="achievement-content">
+            <span class="achievement-label">Achievement Unlocked</span>
+            <h3 class="achievement-title">${achievement.title}</h3>
+            <p class="achievement-subtitle">${achievement.subtitle}</p>
+        </div>
+    `;
+
+    achievementContainer.appendChild(el);
+    playAchievementSound();
+
+    // Trigger slide-in animation
+    requestAnimationFrame(() => {
+        el.classList.add('show');
+    });
+
+    // Slide out after 3 seconds
+    setTimeout(() => {
+        el.classList.remove('show');
+        // Wait for CSS transition to finish before removing from DOM
+        setTimeout(() => el.remove(), 600);
+    }, 3000);
 });
 
 Progress.onLevelUp = (newLevel) => {
@@ -158,6 +290,12 @@ const UI_TEXT = '#ebebeb';
 const UI_ACCENT = '#0ab9e6'; // Neon blue highlight
 
 function updateCanvas(dt) {
+    // If a game is fully occupying the screen, halt OS drawing calculations
+    if (gameOverlayOpacity >= 1 && currentGameApp) {
+        if (currentGameApp.update) currentGameApp.update(dt);
+        return;
+    }
+
     if (isBooting) {
         bootTime += dt;
         if (bootTime > 4.0) {
@@ -220,11 +358,6 @@ function updateCanvas(dt) {
             gameOverlayOpacity = 0;
             currentGameApp = null; // App fully closed
         }
-    }
-
-    // Pass rendering loop down to active Native App modules
-    if (currentGameApp) {
-        currentGameApp.update(dt);
     }
 }
 
@@ -863,13 +996,24 @@ switchGroup.rotation.x = Math.PI / 16;
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
-function triggerAction(action) {
+function pressAction(action) {
     if (currentGameApp) {
-        // Universal escape route
-        if (action === 'home' || action === 'b') {
+        // Intercept minus button for GBA Save Overlay
+        if (action === 'minus' && currentGameApp === gbaApp) {
+            toggleSaveMenu();
+            return;
+        }
+
+        // Universal escape route (Home closes all, B closes non-emulation apps like Settings/Pong)
+        if (action === 'home' || (action === 'b' && currentGameApp !== gbaApp)) {
+            if (isSaveMenuOpen) toggleSaveMenu(); // force close menu if exiting app
+            // Properly pause the GBA emulator when exiting
+            if (currentGameApp === gbaApp && currentGameApp.gba) {
+                currentGameApp.gba.pause();
+            }
             isOpeningGame = false;
         } else {
-            currentGameApp.handleInput(action);
+            if (currentGameApp.handleInput && !isSaveMenuOpen) currentGameApp.handleInput(action, true);
         }
         return; // Don't scroll OS
     }
@@ -890,6 +1034,9 @@ function triggerAction(action) {
         } else if (activeGameIndex === 1) {
             currentGameApp = pongApp;
             pongApp.reset();
+        } else if (activeGameIndex === 3) {
+            currentGameApp = gbaApp;
+            gbaApp.boot();
         } else if (activeGameIndex === 5) {
             currentGameApp = settingsApp;
         } else {
@@ -901,20 +1048,33 @@ function triggerAction(action) {
     }
 }
 
+function releaseAction(action) {
+    if (currentGameApp && currentGameApp.handleInput) {
+        // Don't pass system-level actions to the GBA emulator on release
+        // 'home' would call gba.pause() and freeze the emulator permanently
+        if (action === 'home') return;
+        if (action === 'minus' && currentGameApp === gbaApp) return;
+        currentGameApp.handleInput(action, false);
+    }
+}
+
 let activeButtons = new Set();
 function getOriginalZ(mesh) { return mesh.userData.originalZ; }
 
 function physicalButtonPressed(mesh) {
     if (!mesh || !mesh.userData.action) return;
+    if (activeButtons.has(mesh)) return; // Prevent duplicate triggers if already down
     mesh.position.z = getOriginalZ(mesh) - 0.03; // Animate push
     activeButtons.add(mesh);
-    triggerAction(mesh.userData.action);
+    pressAction(mesh.userData.action);
 }
 
 function physicalButtonReleased(mesh) {
     if (!mesh || !mesh.userData.action) return;
+    if (!activeButtons.has(mesh)) return;
     mesh.position.z = getOriginalZ(mesh);
     activeButtons.delete(mesh);
+    releaseAction(mesh.userData.action);
 }
 
 function releaseAllButtons() {
@@ -943,32 +1103,72 @@ window.addEventListener('pointerup', onPointerUp);
 window.addEventListener('pointerout', onPointerUp);
 
 // Allow keyboard events to visually push the physical 3D buttons
-function pushButtonByAction(actionLabel) {
+function holdButtonByAction(actionLabel) {
     const mesh = interactableMeshes.find(m => m.userData.action === actionLabel);
     if (mesh) {
         physicalButtonPressed(mesh);
-        // Auto-release after a fast pop
-        setTimeout(() => physicalButtonReleased(mesh), 150);
+    }
+}
+
+function unholdButtonByAction(actionLabel) {
+    const mesh = interactableMeshes.find(m => m.userData.action === actionLabel);
+    if (mesh) {
+        physicalButtonReleased(mesh);
     }
 }
 
 function onKeyDown(event) {
+    if (event.repeat) return; // Ignore native keyboard autorepeat
+
     // Prevent default scrolling for game keys
-    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(event.code)) {
+    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "Enter", "Escape"].includes(event.code)) {
         event.preventDefault();
     }
 
     switch (event.code) {
-        case 'ArrowLeft': pushButtonByAction('left'); break;
-        case 'ArrowRight': pushButtonByAction('right'); break;
-        case 'ArrowUp': pushButtonByAction('up'); break;
-        case 'ArrowDown': pushButtonByAction('down'); break;
-        case 'Space': case 'KeyA': pushButtonByAction('a'); break;
-        case 'KeyB': pushButtonByAction('b'); break;
-        case 'Escape': case 'Enter': pushButtonByAction('home'); break;
+        case 'ArrowLeft': holdButtonByAction('left'); break;
+        case 'ArrowRight': holdButtonByAction('right'); break;
+        case 'ArrowUp': holdButtonByAction('up'); break;
+        case 'ArrowDown': holdButtonByAction('down'); break;
+        case 'Space': case 'KeyA': holdButtonByAction('a'); break;
+        case 'KeyB': holdButtonByAction('b'); break;
+        case 'Escape': holdButtonByAction('home'); break;
+        case 'Enter': case 'KeyP': holdButtonByAction('plus'); break;
+        case 'Minus': case 'NumpadSubtract': case 'KeyM': holdButtonByAction('minus'); break;
+    }
+
+    // --- Developer Debug Keys ---
+    if (event.shiftKey && event.code === 'KeyD') {
+        console.log("DEBUG: Unlocking Completionist Tier...");
+        Achievements.state.stats.snake.normal.highScore = Math.max(10, Achievements.state.stats.snake.normal.highScore);
+        Achievements.state.stats.pong.normal.wins = Math.max(5, Achievements.state.stats.pong.normal.wins);
+        Achievements.state.unlocked.completionist = false; // Ensure a fresh trigger
+        Achievements.saveState();
+        Achievements.evaluateUnlocks();
+    }
+
+    if (event.shiftKey && event.code === 'KeyR') {
+        console.log("DEBUG: Resetting Achievements...");
+        localStorage.removeItem('switchplus_achievements');
+        window.location.reload(); // Reload to observe fresh state
     }
 }
 window.addEventListener('keydown', onKeyDown);
+
+function onKeyUp(event) {
+    switch (event.code) {
+        case 'ArrowLeft': unholdButtonByAction('left'); break;
+        case 'ArrowRight': unholdButtonByAction('right'); break;
+        case 'ArrowUp': unholdButtonByAction('up'); break;
+        case 'ArrowDown': unholdButtonByAction('down'); break;
+        case 'Space': case 'KeyA': unholdButtonByAction('a'); break;
+        case 'KeyB': unholdButtonByAction('b'); break;
+        case 'Escape': unholdButtonByAction('home'); break;
+        case 'Enter': case 'KeyP': unholdButtonByAction('plus'); break;
+        case 'Minus': case 'NumpadSubtract': case 'KeyM': unholdButtonByAction('minus'); break;
+    }
+}
+window.addEventListener('keyup', onKeyUp);
 
 // Hook settings changing
 settingsApp.onThemeChange = (newTheme) => {
@@ -989,7 +1189,26 @@ function animate() {
     const dt = Math.min(clock.getDelta(), 0.1);
 
     updateCanvas(dt);
-    drawCanvas();
+    if (gameOverlayOpacity < 1) {
+        drawCanvas();
+    }
+
+    // Draw the active app overlay on top if opacity allows
+    if (gameOverlayOpacity > 0 && currentGameApp && currentGameApp.draw) {
+        ctx.globalAlpha = gameOverlayOpacity;
+        currentGameApp.draw(ctx, w, h);
+        ctx.globalAlpha = 1.0;
+
+        // Settings app has a custom X button layout, don't draw our own
+        if (currentGameApp !== settingsApp) {
+            // Draw a tiny "Press B to Exit" hint if we are in a game
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '20px sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText("Press B to Exit", w - 20, 30);
+        }
+    }
+
     drawBootAnimation(); // Fixed! The boot splash is drawn on top of the OS while booting
     screenTexture.needsUpdate = true;
 

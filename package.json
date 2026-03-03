@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "buffer": "^6.0.3",
+    "esbuild": "^0.27.3",
+    "gbajs": "^1.1.2",
+    "playwright": "^1.58.2"
+  }
+}

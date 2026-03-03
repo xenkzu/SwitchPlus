@@ -1,6 +1,7 @@
 import { Progress } from './progress.js';
 import { Unlocks } from './unlocks.js';
 import { Daily } from './daily.js';
+import { Achievements } from './achievements.js';
 
 export class PongApp {
     constructor(gridW, gridH, gridSize) {
@@ -22,12 +23,19 @@ export class PongApp {
         this.ballBaseSpeed = 30;
         this.controlsInverted = false;
         this.playerPaddleHeightMult = 1.0;
+        this.isHardMode = false; // Will be set by OS
 
         // Apply any active daily challenges 
         Daily.applyToGame(this, 'pong');
+
+        if (this.isHardMode) {
+            this.ballBaseSpeed = 45; // 50% faster ball
+        }
     }
 
-    handleInput(action) {
+    handleInput(action, isDown) {
+        if (!isDown) return;
+
         let actUp = this.controlsInverted ? 'down' : 'up';
         let actDown = this.controlsInverted ? 'up' : 'down';
 
@@ -50,8 +58,14 @@ export class PongApp {
         if (this.ball.y < 0 || this.ball.y > this.gridH) this.ball.dy *= -1;
 
         // AI Logic
-        if (this.aiY < this.ball.y - 2) this.aiY += 15 * this.aiSpeedMult * dt;
-        if (this.aiY > this.ball.y + 2) this.aiY -= 15 * this.aiSpeedMult * dt;
+        if (this.isHardMode) {
+            // Perfect tracking in hard mode, moves exactly where the ball is
+            this.aiY = this.ball.y;
+        } else {
+            // Lazy tracking
+            if (this.aiY < this.ball.y - 2) this.aiY += 15 * this.aiSpeedMult * dt;
+            if (this.aiY > this.ball.y + 2) this.aiY -= 15 * this.aiSpeedMult * dt;
+        }
 
         // Check Paddles
         // Player (Left)
@@ -89,11 +103,18 @@ export class PongApp {
             xpGained += 20; // Win bonus
             const margin = this.score.player - this.score.ai;
             xpGained += margin * 5; // Clean win bonus
+
+            // Record Win for Completionist/Mastery
+            Achievements.recordPongWin(this.isHardMode);
         }
 
         if (Daily.isActive) {
             xpGained *= 1.5; // Daily bonus multiplier
             Daily.isActive = false; // Turn off until requested again
+        }
+
+        if (this.isHardMode) {
+            xpGained *= 2.0;
         }
 
         Progress.addXP(Math.floor(xpGained), "Finished a game of Pong");
@@ -114,9 +135,13 @@ export class PongApp {
         for (let i = 0; i < h; i += 40) ctx.fillRect(w / 2 - 2, i, 4, 20);
 
         // Score
+        ctx.textAlign = 'center';
         ctx.font = 'bold 80px "Outfit"';
+
+        ctx.fillStyle = this.isHardMode ? '#ef4444' : '#fff';
         ctx.fillText(this.score.player, w / 4, 100);
         ctx.fillText(this.score.ai, (w / 4) * 3, 100);
+        ctx.fillStyle = '#fff';
 
         // Player Paddle
         const pHalfHeight = 3 * this.playerPaddleHeightMult;

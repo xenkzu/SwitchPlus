@@ -1,6 +1,7 @@
 import { Progress } from './progress.js';
 import { Unlocks } from './unlocks.js';
 import { Daily } from './daily.js';
+import { Achievements } from './achievements.js';
 
 export class SnakeApp {
     constructor(gridW, gridH, gridSize) {
@@ -20,9 +21,15 @@ export class SnakeApp {
         // Base defaults
         this.tickRate = 0.1;
         this.growthPerApple = 1;
+        this.isHardMode = false; // Will be set by main.js if toggled
 
         // Apply daily 
         Daily.applyToGame(this, 'snake');
+
+        // Apply Hard Mode modifiers
+        if (this.isHardMode) {
+            this.tickRate = 0.05; // 2x as fast
+        }
 
         this.snake = [
             { x: Math.floor(this.gridW / 2), y: Math.floor(this.gridH / 2) },
@@ -44,7 +51,9 @@ export class SnakeApp {
         };
     }
 
-    handleInput(action) {
+    handleInput(action, isDown) {
+        if (!isDown) return;
+
         if (action === 'up' && this.dir.y === 0) this.nextDir = { x: 0, y: -1 };
         if (action === 'down' && this.dir.y === 0) this.nextDir = { x: 0, y: 1 };
         if (action === 'left' && this.dir.x === 0) this.nextDir = { x: -1, y: 0 };
@@ -104,9 +113,16 @@ export class SnakeApp {
             Daily.isActive = false; // Turn off daily modifiers until requested again
         }
 
+        if (this.isHardMode) {
+            xpGained *= 2.0; // Hard mode bonus
+        }
+
         Progress.addXP(Math.floor(xpGained), "Played Snake");
 
-        // Check Unlocks (Score 150+ grants the achievement)
+        // Record for new Achievement System
+        Achievements.recordSnakeScore(this.score / 10, this.isHardMode); // Pass raw apple count
+
+        // Check legacy Unlocks (Score 150+ grants the achievement)
         Unlocks.checkCondition('snake_score_15', { score: this.score });
     }
 
@@ -129,7 +145,11 @@ export class SnakeApp {
         ctx.fillStyle = 'white';
         ctx.font = 'bold 30px "Outfit"';
         ctx.textAlign = 'left';
-        ctx.fillText("SCORE: " + this.score, 30, 50);
+
+        // Indicate mode
+        const modeText = this.isHardMode ? " [HARD]" : "";
+        ctx.fillStyle = this.isHardMode ? '#ef4444' : 'white';
+        ctx.fillText(`SCORE: ${this.score}${modeText}`, 30, 50);
 
         if (this.gameOver) {
             ctx.textAlign = 'center';
