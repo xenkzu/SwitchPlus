@@ -71,11 +71,11 @@ const gridH = Math.floor(h / gridSize);
 // Game State / UI State
 let activeGameIndex = 0;
 const games = [
-    { title: "Snake", color: "#10b981", img: "assets/snake.png" },
-    { title: "Pong", color: "#b91c1c", img: "assets/pong.png" },
+    { title: "Snake", color: "#10b981", img: "assets/snake.jpg", justifyRight: true },
+    { title: "Pong", color: "#b91c1c", img: "assets/pong.jpg" },
     { title: "Daily Challenge", color: "#eab308", img: "assets/daily.png" }, // New generic daily app tile
-    { title: "Game Boy Advance", color: "#ef4444", img: "https://upload.wikimedia.org/wikipedia/en/9/9f/Pokemon_FireRed_Box_Art.jpg" }, // Live GBA Emulator
-    { title: "Super Smash Bros", color: "#4c1d95", img: "https://upload.wikimedia.org/wikipedia/en/5/50/Super_Smash_Bros._Ultimate.jpg" },
+    { title: "Pokémon FireRed", color: "#ef4444", img: "assets/firered.png" }, // Live GBA Emulator
+    { title: "Super Smash Bros", color: "#4c1d95", img: "" },
     { title: "System Settings", color: "#2a2a2a", img: "" }
 ];
 
@@ -83,7 +83,6 @@ const games = [
 games.forEach(g => {
     if (g.img) {
         const img = new Image();
-        img.crossOrigin = "Anonymous";
         img.src = g.img;
         g.imageObj = img;
     }
@@ -456,7 +455,20 @@ function drawCanvas() {
             drawRoundedRect(-baseSize / 2, -baseSize / 2, baseSize, baseSize, cornerRadius);
             ctx.clip();
 
-            ctx.drawImage(games[i].imageObj, -baseSize / 2, -baseSize / 2, baseSize, baseSize);
+            const img = games[i].imageObj;
+            let dw = baseSize;
+            let dh = baseSize;
+            let dx = -baseSize / 2;
+            let dy = -baseSize / 2;
+
+            if (games[i].justifyRight) {
+                const imgRatio = img.naturalWidth / img.naturalHeight;
+                dw = baseSize * imgRatio;
+                // Shift left by the extra width so the right side is flush
+                dx = -baseSize / 2 - (dw - baseSize);
+            }
+
+            ctx.drawImage(img, dx, dy, dw, dh);
 
             // Draw special text over Daily Challenge 
             if (i === 2) {
