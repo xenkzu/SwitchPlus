@@ -1,9 +1,9 @@
 /**
  * IndexedDB wrapper for managing GBA emulator save slots.
- * SRAM blobs can be large (up to 128KB), so IndexedDB is used instead of localStorage.
+ * Stores full emulator state snapshots, SRAM buffers, screenshots, and timestamps.
  */
 export class SaveDB {
-    constructor(dbName = 'SwitchPlusSaves', dbVersion = 1) {
+    constructor(dbName = 'SwitchPlusSaves', dbVersion = 2) {
         this.dbName = dbName;
         this.dbVersion = dbVersion;
         this.db = null;
@@ -32,25 +32,35 @@ export class SaveDB {
             request.onupgradeneeded = (event) => {
                 const db = event.target.result;
                 if (!db.objectStoreNames.contains(this.storeName)) {
-                    // Create object store with a composite key path for Game ID and Slot ID
                     db.createObjectStore(this.storeName, { keyPath: ['gameId', 'slotId'] });
                 }
+                // V2 adds state, screenshot fields — no schema migration needed
+                // since we use put() and the new fields are simply added to the data objects
             };
         });
     }
 
-    async saveSlot(gameId, slotId, buffer) {
+    /**
+     * Save a slot with full state, SRAM buffer, screenshot, and timestamp.
+     * @param {string} gameId
+     * @param {string} slotId
+     * @param {ArrayBuffer|null} buffer - SRAM buffer
+     * @param {Object|null} state - Full emulator freeze() state object
+     * @param {string|null} screenshot - Data URL of the current frame
+     */
+    async saveSlot(gameId, slotId, buffer, state = null, screenshot = null) {
         await this.init();
         return new Promise((resolve, reject) => {
             const transaction = this.db.transaction([this.storeName], 'readwrite');
             const store = transaction.objectStore(this.storeName);
 
-            // buffer must be ArrayBuffer or Uint8Array
             const data = {
                 gameId: gameId,
                 slotId: slotId,
                 timestamp: Date.now(),
-                buffer: buffer
+                buffer: buffer,
+                state: state,
+                screenshot: screenshot
             };
 
             const request = store.put(data);
@@ -60,6 +70,10 @@ export class SaveDB {
         });
     }
 
+    /**
+     * Load a slot's full record (state + screenshot + timestamp + buffer).
+     * Returns the entire record object, or null if no save exists.
+     */
     async loadSlot(gameId, slotId) {
         await this.init();
         return new Promise((resolve, reject) => {
@@ -68,16 +82,16 @@ export class SaveDB {
             const request = store.get([gameId, slotId]);
 
             request.onsuccess = (event) => {
-                if (event.target.result) {
-                    resolve(event.target.result.buffer);
-                } else {
-                    resolve(null); // No save exists
-                }
+                resolve(event.target.result || null);
             };
             request.onerror = (e) => reject(e.target.error);
         });
     }
 
+    /**
+     * Get metadata for all slots belonging to a game.
+     * Returns lightweight records (screenshot + timestamp) without the heavy state/buffer blobs.
+     */
     async getAvailableSlots(gameId) {
         await this.init();
         return new Promise((resolve, reject) => {
@@ -87,13 +101,14 @@ export class SaveDB {
 
             request.onsuccess = (event) => {
                 const results = event.target.result;
-                // Filter by gameId and return metadata (without the entire buffer blob for fast UI rendering)
                 const slots = results
                     .filter(item => item.gameId === gameId)
                     .map(item => ({
                         slotId: item.slotId,
                         timestamp: item.timestamp,
-                        size: item.buffer.byteLength
+                        screenshot: item.screenshot || null,
+                        hasState: !!item.state,
+                        size: item.buffer ? item.buffer.byteLength : 0
                     }));
                 resolve(slots);
             };

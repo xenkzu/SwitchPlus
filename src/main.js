@@ -8,6 +8,7 @@ import { Progress } from './apps/progress.js';
 import { Daily } from './apps/daily.js';
 import { Achievements } from './apps/achievements.js';
 import { GBAApp } from './apps/gba.js';
+import { saveDB } from './apps/utils/saveDB.js';
 
 // --- 1. Scene Setup & Aesthetics ---
 const container = document.getElementById('scene-container');
@@ -127,110 +128,138 @@ window.addEventListener('switchplus_unlocked', (e) => {
 const achievementContainer = document.getElementById('achievement-container');
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-// --- Save Slot UI (Global DOM Popup) ---
+// --- Save Slot UI (Dynamic DOM Overlay) ---
 const saveOverlay = document.createElement('div');
 saveOverlay.id = 'save-overlay';
-saveOverlay.innerHTML = `
-    <div style="position: fixed; top:0; left:0; width:100vw; height:100vh; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 2000; font-family: 'Inter', sans-serif;">
-        
-        <!-- System Dialog Box -->
-        <div style="background: #2a2a2a; width: 600px; max-width: 90vw; border-radius: 6px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); overflow: hidden; display: flex; flex-direction: column;">
-            
-            <!-- Dialog Header -->
-            <div style="padding: 20px 24px; border-bottom: 2px solid #3f3f46; border-top: 4px solid #ef4444; display: flex; align-items: center; gap: 12px;">
-                <div style="width: 24px; height: 24px; background: #666; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-                </div>
-                <h1 style="color: #fff; font-size: 20px; font-weight: 600; margin: 0; letter-spacing: 0.5px;">Select Save Data</h1>
-            </div>
-
-            <!-- Dialog Body (Slots) -->
-            <div style="padding: 24px; display: flex; flex-direction: column; gap: 12px;">
-                <button id="slot1-btn" class="save-slot-btn" style="display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 18px 24px; font-size: 20px; font-weight: 600; border-radius: 4px; border: 4px solid transparent; background: #3f3f46; color: #fff; cursor: pointer; transition: all 0.1s; text-align: left;">
-                    <span>Slot 1</span>
-                    <span style="font-size: 14px; color: #aaa; font-weight: 500;">Load Data</span>
-                </button>
-                <button id="slot2-btn" class="save-slot-btn" style="display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 18px 24px; font-size: 20px; font-weight: 600; border-radius: 4px; border: 4px solid transparent; background: #3f3f46; color: #fff; cursor: pointer; transition: all 0.1s; text-align: left;">
-                    <span>Slot 2</span>
-                    <span style="font-size: 14px; color: #aaa; font-weight: 500;">Load Data</span>
-                </button>
-                <button id="slot3-btn" class="save-slot-btn" style="display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 18px 24px; font-size: 20px; font-weight: 600; border-radius: 4px; border: 4px solid transparent; background: #3f3f46; color: #fff; cursor: pointer; transition: all 0.1s; text-align: left;">
-                    <span>Slot 3</span>
-                    <span style="font-size: 14px; color: #aaa; font-weight: 500;">Load Data</span>
-                </button>
-                <p style="color: #888; margin-top: 12px; font-size: 14px; text-align: center; font-weight: 500;">Note: Changing slots will restart the emulator software.</p>
-            </div>
-        </div>
-
-        <!-- OS Bottom Controls Hint -->
-        <div style="position: absolute; bottom: 30px; right: 40px; display: flex; gap: 24px; align-items: center;">
-            <div id="close-save-btn" style="display: flex; align-items: center; gap: 8px; color: #fff; font-size: 20px; font-weight: 600; cursor: pointer; text-decoration: none;">
-                <div style="background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.2); border-radius: 6px; width: 36px; height: 36px; display: flex; justify-content: center; align-items: center; font-size: 24px; line-height: 0; padding-bottom: 4px;">-</div>
-                <span>Close</span>
-            </div>
-        </div>
-    </div>
-`;
 saveOverlay.style.display = 'none';
 document.body.appendChild(saveOverlay);
 
 let isSaveMenuOpen = false;
 
-function toggleSaveMenu() {
-    isSaveMenuOpen = !isSaveMenuOpen;
-    saveOverlay.style.display = isSaveMenuOpen ? 'flex' : 'none';
+function formatSaveDate(ts) {
+    if (!ts) return 'Empty';
+    const d = new Date(ts);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
+        ' — ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
 
-    // Highlight active slot
-    ['1', '2', '3'].forEach(num => {
-        const btn = document.getElementById(`slot${num}-btn`);
-        if (`Slot ${num}` === gbaApp.currentSlot) {
-            btn.style.borderColor = '#0ab9e6';
-            // Slight pop-out effect for selected items on Switch
-            btn.style.transform = 'scale(1.02)';
-            btn.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
-        } else {
-            btn.style.borderColor = 'transparent';
-            btn.style.transform = 'scale(1)';
-            btn.style.boxShadow = 'none';
-        }
-    });
+function buildSlotHTML(slotId, meta) {
+    const hasData = !!meta;
+    const screenshot = meta && meta.screenshot
+        ? `<img src="${meta.screenshot}" style="width: 96px; height: 64px; object-fit: cover; border-radius: 4px; background: #222; flex-shrink: 0;" />`
+        : `<div style="width: 96px; height: 64px; background: #222; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #555; font-size: 12px; flex-shrink: 0;">No Data</div>`;
+    const timestamp = hasData ? formatSaveDate(meta.timestamp) : 'Empty Slot';
+    const isActive = slotId === gbaApp.currentSlot;
+    const borderStyle = isActive ? '4px solid #0ab9e6' : '4px solid transparent';
 
-    if (isSaveMenuOpen) {
-        gbaApp.gba.pause();
-    } else {
-        gbaApp.gba.runStable();
+    return `
+        <div class="save-slot-row" data-slot="${slotId}" style="display: flex; align-items: center; gap: 16px; width: 100%; padding: 12px 16px; border-radius: 4px; border: ${borderStyle}; background: #3f3f46; cursor: default; transition: all 0.1s;">
+            ${screenshot}
+            <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+                <span style="font-size: 18px; font-weight: 600; color: #fff;">${slotId}</span>
+                <span style="font-size: 13px; color: #aaa; font-weight: 400;">${timestamp}</span>
+            </div>
+            <div style="display: flex; gap: 8px; flex-shrink: 0;">
+                <button class="slot-save-btn" data-slot="${slotId}" style="padding: 8px 16px; font-size: 14px; font-weight: 600; border-radius: 4px; border: none; background: #0ab9e6; color: #fff; cursor: pointer; transition: opacity 0.1s;">Save</button>
+                <button class="slot-load-btn" data-slot="${slotId}" style="padding: 8px 16px; font-size: 14px; font-weight: 600; border-radius: 4px; border: none; background: ${hasData ? '#52525b' : '#333'}; color: ${hasData ? '#fff' : '#666'}; cursor: ${hasData ? 'pointer' : 'default'}; transition: opacity 0.1s;" ${hasData ? '' : 'disabled'}>Load</button>
+            </div>
+        </div>
+    `;
+}
+
+async function renderSaveOverlay() {
+    let slotsMeta = {};
+    try {
+        const slots = await saveDB.getAvailableSlots(gbaApp.gameId);
+        slots.forEach(s => { slotsMeta[s.slotId] = s; });
+    } catch (e) {
+        console.warn('Failed to query save slots:', e);
     }
-}
 
-function selectSlot(slotName) {
-    if (gbaApp.currentSlot === slotName) return; // Ignore if already selected
-    gbaApp.currentSlot = slotName;
-    toggleSaveMenu();
-    gbaApp.boot();
-}
+    const slotIds = ['Slot 1', 'Slot 2', 'Slot 3'];
 
-// Add event listeners once DOM is inserted
-setTimeout(() => {
-    document.getElementById('slot1-btn').onclick = () => selectSlot('Slot 1');
-    document.getElementById('slot2-btn').onclick = () => selectSlot('Slot 2');
-    document.getElementById('slot3-btn').onclick = () => selectSlot('Slot 3');
+    saveOverlay.innerHTML = `
+        <div style="position: fixed; top:0; left:0; width:100vw; height:100vh; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 2000; font-family: 'Inter', sans-serif;">
+            <div style="background: #2a2a2a; width: 640px; max-width: 92vw; border-radius: 6px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); overflow: hidden; display: flex; flex-direction: column;">
+                <div style="padding: 20px 24px; border-bottom: 2px solid #3f3f46; border-top: 4px solid #ef4444; display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 24px; height: 24px; background: #666; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                    </div>
+                    <h1 style="color: #fff; font-size: 20px; font-weight: 600; margin: 0; letter-spacing: 0.5px;">Save Data</h1>
+                </div>
+                <div style="padding: 20px; display: flex; flex-direction: column; gap: 10px;">
+                    ${slotIds.map(id => buildSlotHTML(id, slotsMeta[id] || null)).join('')}
+                </div>
+            </div>
+            <div style="position: absolute; bottom: 30px; right: 40px; display: flex; gap: 24px; align-items: center;">
+                <div id="close-save-btn" style="display: flex; align-items: center; gap: 8px; color: #fff; font-size: 20px; font-weight: 600; cursor: pointer;">
+                    <div style="background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.2); border-radius: 6px; width: 36px; height: 36px; display: flex; justify-content: center; align-items: center; font-size: 24px; line-height: 0; padding-bottom: 4px;">-</div>
+                    <span>Close</span>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Wire up event listeners
     document.getElementById('close-save-btn').onclick = () => toggleSaveMenu();
 
-    // Hover effects (matches Switch subtle grey highlight)
-    document.querySelectorAll('.save-slot-btn').forEach(btn => {
-        btn.addEventListener('mouseenter', e => {
-            e.target.style.background = '#4f4f56';
-        });
-        btn.addEventListener('mouseleave', e => {
-            e.target.style.background = '#3f3f46';
-        });
+    saveOverlay.querySelectorAll('.slot-save-btn').forEach(btn => {
+        btn.onclick = async () => {
+            const slotId = btn.dataset.slot;
+            btn.textContent = 'Saving...';
+            btn.disabled = true;
+            const ok = await gbaApp.saveState(slotId);
+            if (ok) {
+                // Re-render the overlay to show the new screenshot and timestamp
+                await renderSaveOverlay();
+            } else {
+                btn.textContent = 'Failed';
+                setTimeout(() => { btn.textContent = 'Save'; btn.disabled = false; }, 1500);
+            }
+        };
     });
 
-    // Bottom right button hover
+    saveOverlay.querySelectorAll('.slot-load-btn:not([disabled])').forEach(btn => {
+        btn.onclick = async () => {
+            const slotId = btn.dataset.slot;
+            btn.textContent = 'Loading...';
+            btn.disabled = true;
+            const ok = await gbaApp.loadState(slotId);
+            if (ok) {
+                // Close the menu after successful load (emulator already resumed by loadState)
+                isSaveMenuOpen = false;
+                saveOverlay.style.display = 'none';
+            } else {
+                btn.textContent = 'Failed';
+                setTimeout(() => { btn.textContent = 'Load'; btn.disabled = false; }, 1500);
+            }
+        };
+    });
+
+    // Hover effects on rows
+    saveOverlay.querySelectorAll('.save-slot-row').forEach(row => {
+        row.addEventListener('mouseenter', () => { row.style.background = '#4f4f56'; });
+        row.addEventListener('mouseleave', () => { row.style.background = '#3f3f46'; });
+    });
+
+    // Close button hover
     const closeBtn = document.getElementById('close-save-btn');
-    closeBtn.addEventListener('mouseenter', e => { e.currentTarget.style.opacity = '0.7'; });
-    closeBtn.addEventListener('mouseleave', e => { e.currentTarget.style.opacity = '1'; });
-}, 100);
+    closeBtn.addEventListener('mouseenter', () => { closeBtn.style.opacity = '0.7'; });
+    closeBtn.addEventListener('mouseleave', () => { closeBtn.style.opacity = '1'; });
+}
+
+async function toggleSaveMenu() {
+    isSaveMenuOpen = !isSaveMenuOpen;
+
+    if (isSaveMenuOpen) {
+        if (currentGameApp === gbaApp) gbaApp.pause();
+        await renderSaveOverlay();
+        saveOverlay.style.display = 'flex';
+    } else {
+        saveOverlay.style.display = 'none';
+        if (currentGameApp === gbaApp) gbaApp.resume();
+    }
+}
 
 function playAchievementSound() {
     if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -1067,8 +1096,8 @@ function pressAction(action) {
         if (action === 'home' || (action === 'b' && currentGameApp !== gbaApp)) {
             if (isSaveMenuOpen) toggleSaveMenu(); // force close menu if exiting app
             // Properly pause the GBA emulator when exiting
-            if (currentGameApp === gbaApp && currentGameApp.gba) {
-                currentGameApp.gba.pause();
+            if (currentGameApp === gbaApp) {
+                gbaApp.pause();
             }
             isOpeningGame = false;
         } else {
@@ -1189,8 +1218,10 @@ function onKeyDown(event) {
         case 'ArrowRight': holdButtonByAction('right'); break;
         case 'ArrowUp': holdButtonByAction('up'); break;
         case 'ArrowDown': holdButtonByAction('down'); break;
-        case 'Space': case 'KeyA': holdButtonByAction('a'); break;
-        case 'KeyB': holdButtonByAction('b'); break;
+        case 'Space': case 'KeyD': holdButtonByAction('a'); break;
+        case 'KeyS': case 'KeyB': holdButtonByAction('b'); break;
+        case 'KeyW': holdButtonByAction('x'); break;
+        case 'KeyA': holdButtonByAction('y'); break;
         case 'Escape': holdButtonByAction('home'); break;
         case 'Enter': case 'KeyP': holdButtonByAction('plus'); break;
         case 'Minus': case 'NumpadSubtract': case 'KeyM': holdButtonByAction('minus'); break;
@@ -1220,8 +1251,10 @@ function onKeyUp(event) {
         case 'ArrowRight': unholdButtonByAction('right'); break;
         case 'ArrowUp': unholdButtonByAction('up'); break;
         case 'ArrowDown': unholdButtonByAction('down'); break;
-        case 'Space': case 'KeyA': unholdButtonByAction('a'); break;
-        case 'KeyB': unholdButtonByAction('b'); break;
+        case 'Space': case 'KeyD': unholdButtonByAction('a'); break;
+        case 'KeyS': case 'KeyB': unholdButtonByAction('b'); break;
+        case 'KeyW': unholdButtonByAction('x'); break;
+        case 'KeyA': unholdButtonByAction('y'); break;
         case 'Escape': unholdButtonByAction('home'); break;
         case 'Enter': case 'KeyP': unholdButtonByAction('plus'); break;
         case 'Minus': case 'NumpadSubtract': case 'KeyM': unholdButtonByAction('minus'); break;
