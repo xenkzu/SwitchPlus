@@ -1,59 +1,97 @@
-# 3D Nintendo Switch Interactive Experience
+# Switch Plus
 
-A high-fidelity, fully interactive 3D model of a Nintendo Switch, built entirely with **Three.js** and HTML5 Canvas. This project not only renders a realistic console that you can rotate and inspect in 3D space, but it also features a functional simulated operating system and fully playable native mini-games!
+A high-fidelity, fully interactive 3D Nintendo Switch built with **Three.js** and HTML5 Canvas. Features a functional simulated operating system, playable mini-games, a working Game Boy Advance emulator, an achievement system, and dynamic hardware theming.
 
-## ✨ Features
 
-### Detailed 3D Hardware Model
-- **Accurate Geometry:** The console is modeled proportionally, featuring perfectly beveled Joy-Cons, precise analog sticks, contoured shoulder bumpers (L/R), sloped rear triggers (ZL/ZR), and a realistic screen bezel.
-- **Realistic Materials:** Utilizes `MeshStandardMaterial` for authentic plastic textures, glossy screens, and vibrant Joy-Con colors, enhanced by advanced scene lighting (Key, Fill, Rim, Ambient) and ACESFilmic Tone Mapping.
-- **Physical Button Interactions:** Clicking the 3D buttons (A, B, X, Y, D-Pad, Triggers, etc.) with your mouse physically pushes the buttons inward on the model.
-- **Keyboard Hardware Sync:** Pressing the Arrow Keys or 'A'/'B' keys natively triggers the same 3D button depression animations, bridging the gap between your physical keyboard and the virtual hardware!
-- **Free Camera Rotation:** Seamlessly orbit, pan, and zoom around the console in full 3D space using `OrbitControls`, even while games are running on the screen!
+## Features
 
-### Interactive Canvas Operating System
-- **Nintendo Boot Sequence:** The project greets you with an authentic sliding Joy-Con logo boot-up animation.
-- **Dynamic OS Menu:** Navigate a sleek, scrolling horizontal game tile carousel rendered cleanly using HTML5 Canvas (`CanvasTexture`).
-- **Smooth Visuals:** Hover states, selection bouncing, and simulated app launching transitions.
+### 3D Hardware Model
+- Proportionally accurate geometry with beveled Joy-Cons, analog sticks, shoulder bumpers (L/R), rear triggers (ZL/ZR), and a realistic screen bezel.
+- Realistic materials using `MeshStandardMaterial` with authentic plastic textures, matte back panel, and vibrant Joy-Con colors.
+- Advanced scene lighting (Key, Fill, Rim, Ambient) with ACESFilmic Tone Mapping.
+- Physical button interactions — clicking 3D buttons with your mouse pushes them inward on the model.
+- Keyboard-to-hardware sync — pressing keys triggers matching 3D button animations.
+- Free camera rotation via `OrbitControls` (orbit, pan, zoom), even while games are running.
 
-### Playable Native Mini-Games
-Games are rendered natively inside the 3D screen using a 2D context canvas loop, completely avoiding the need for clunky `iframes`. All games are playable using your keyboard (Arrow Keys & Space) or by clicking the 3D Joy-Con buttons!
+### Operating System
+- Authentic sliding Joy-Con logo boot-up animation.
+- Scrolling horizontal game tile carousel rendered on the 3D screen via `CanvasTexture`.
+- Smooth hover states, selection bouncing, and app launching transitions.
+- Player profile and level system displayed in the top-left corner.
 
-* **Snake (*Game Tile 1*):** A fully functional Snake clone. Guide your green snake, eat food, and go for a high score!
-* **Pong (*Game Tile 2*):** A built-in Pong clone featuring a reactive AI opponent. First to 5 wins!
+### Native Mini-Games
+Games render directly inside the 3D screen using a 2D canvas loop — no iframes.
+- **Snake** — Guide your snake, eat food, and chase a high score.
+- **Pong** — Play against a reactive AI opponent. First to 5 wins.
 
-### Dynamic Hardware Theming
-* **System Settings (*Tile 6*):** Open the settings app to dynamically swap the physical colors of your 3D Joy-Cons! Changing themes in the app immediately updates the 3D materials in the scene.
-* **Available Themes:** Neon (Default), Classic Grey, Animal Crossing, and Pokemon.
+### GBA Emulator (Pokemon FireRed)
+- Integrated **gbajs** emulator running Pokemon FireRed directly on the 3D Switch screen.
+- Full audio support through the Web Audio API.
+- Complete input mapping — all keyboard controls and 3D button clicks are forwarded to the emulator.
+- **Multiple Save Slots** — Press the minus (-) button to open the Save Data menu. Three independent save slots backed by IndexedDB for persistence across sessions.
 
-## 📁 Project Structure
+### Achievement System
+- Unlockable achievements triggered by gameplay milestones (first game launch, high scores, etc.).
+- Toast notifications slide in from the top-left corner with a chime sound effect.
+- Persistent progress tracking with a player leveling system.
 
-This project uses modern ES6 JavaScript modules for clean, maintainable architecture.
+### Hardware Theming
+- Open System Settings to dynamically swap Joy-Con colors on the 3D model in real time.
+- Available themes: Neon (default), Classic Grey, Animal Crossing, and Pokemon.
 
-* `index.html` - The entryway that sets up the UI layer and WebGL container.
-* `style.css` - Styling for the background gradients and UI overlays.
-* `main.js` - The core engine. Handles the Three.js 3D scene, lighting, controls, rendering loop, and raycasting.
-* `apps/` - Contains the isolated logic for the native canvas applications.
-  * `settings.js` - Logic and rendering for the Theme Switcher.
-  * `snake.js` - Game logic, collisions, and layout for Snake.
-  * `pong.js` - Game loop and AI logic for Pong.
 
-## 🚀 How to Run
+## Project Structure
 
-Since ES6 Modules are used, you must run this project on a local web server (opening the `.html` file directly in a browser may throw CORS errors).
+```
+index.html              Entry point — sets up the UI layer and WebGL container
+src/
+  main.js               Core engine — Three.js scene, lighting, controls, rendering, raycasting
+  style.css             Background gradients, UI overlays, achievement toast styling
+  apps/
+    snake.js            Snake game logic and rendering
+    pong.js             Pong game loop and AI
+    settings.js         Theme switcher logic
+    gba.js              GBA emulator integration (boot, input forwarding, save/load)
+    achievements.js     Achievement definitions and unlock logic
+    utils/
+      saveDB.js         IndexedDB helper for persistent GBA save slots
+assets/
+  emu/
+    gbajs.js            Bundled GBA emulator core
+  roms/
+    bios.bin            GBA BIOS file
+    pokemon.gba         Pokemon FireRed ROM
+  snake.jpg             Snake game tile image
+  pong.jpg              Pong game tile image
+  firered.png           Pokemon FireRed tile image
+```
 
-**Using Python:**
+
+## How to Run
+
+This project uses ES6 modules, so it must be served from a local web server.
+
 ```bash
+# Using Node.js
+npx serve .
+
+# Using Python
 python -m http.server 8000
 ```
-Then visit `http://localhost:8000` in your browser.
 
-## ⌨️ Controls
+Then open `http://localhost:8000` in your browser.
 
-* **Left Click & Drag:** Rotate the 3D Switch.
-* **Right Click & Drag:** Pan the camera.
-* **Scroll Wheel:** Zoom in/out.
-* **Arrow Keys (Left/Right):** Navigate the OS Home Menu.
-* **Spacebar or 'A' Key:** Select/Launch a game.
-* **Escape or 'Enter' / 'B' Key:** Exit the current game and return to the Home Menu.
-* **In-Game (Arrow Keys):** Control Snake/Pong functionality.
+
+## Controls
+
+| Action | Input |
+|---|---|
+| Rotate the 3D Switch | Left Click + Drag |
+| Pan the camera | Right Click + Drag |
+| Zoom in/out | Scroll Wheel |
+| Navigate Home Menu | Arrow Keys (Left / Right) |
+| Select / Launch | Spacebar or A key |
+| Exit to Home Menu | Escape or B key |
+| GBA Start button | Enter or P key |
+| Open Save Data menu | Minus (-) key |
+| In-game controls | Arrow Keys |

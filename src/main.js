@@ -132,14 +132,43 @@ const saveOverlay = document.createElement('div');
 saveOverlay.id = 'save-overlay';
 saveOverlay.innerHTML = `
     <div style="position: fixed; top:0; left:0; width:100vw; height:100vh; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 2000; font-family: 'Inter', sans-serif;">
-        <h1 style="color: white; margin-bottom: 30px; font-size: 32px; font-weight: 700;">Select Save Slot</h1>
-        <div style="display: flex; gap: 20px;">
-            <button id="slot1-btn" class="save-slot-btn" style="padding: 20px 40px; font-size: 20px; font-weight: 600; border-radius: 12px; border: 2px solid #555; background: #222; color: #fff; cursor: pointer; transition: all 0.2s;">Slot 1</button>
-            <button id="slot2-btn" class="save-slot-btn" style="padding: 20px 40px; font-size: 20px; font-weight: 600; border-radius: 12px; border: 2px solid #555; background: #222; color: #fff; cursor: pointer; transition: all 0.2s;">Slot 2</button>
-            <button id="slot3-btn" class="save-slot-btn" style="padding: 20px 40px; font-size: 20px; font-weight: 600; border-radius: 12px; border: 2px solid #555; background: #222; color: #fff; cursor: pointer; transition: all 0.2s;">Slot 3</button>
+        
+        <!-- System Dialog Box -->
+        <div style="background: #2a2a2a; width: 600px; max-width: 90vw; border-radius: 6px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); overflow: hidden; display: flex; flex-direction: column;">
+            
+            <!-- Dialog Header -->
+            <div style="padding: 20px 24px; border-bottom: 2px solid #3f3f46; border-top: 4px solid #ef4444; display: flex; align-items: center; gap: 12px;">
+                <div style="width: 24px; height: 24px; background: #666; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                </div>
+                <h1 style="color: #fff; font-size: 20px; font-weight: 600; margin: 0; letter-spacing: 0.5px;">Select Save Data</h1>
+            </div>
+
+            <!-- Dialog Body (Slots) -->
+            <div style="padding: 24px; display: flex; flex-direction: column; gap: 12px;">
+                <button id="slot1-btn" class="save-slot-btn" style="display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 18px 24px; font-size: 20px; font-weight: 600; border-radius: 4px; border: 4px solid transparent; background: #3f3f46; color: #fff; cursor: pointer; transition: all 0.1s; text-align: left;">
+                    <span>Slot 1</span>
+                    <span style="font-size: 14px; color: #aaa; font-weight: 500;">Load Data</span>
+                </button>
+                <button id="slot2-btn" class="save-slot-btn" style="display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 18px 24px; font-size: 20px; font-weight: 600; border-radius: 4px; border: 4px solid transparent; background: #3f3f46; color: #fff; cursor: pointer; transition: all 0.1s; text-align: left;">
+                    <span>Slot 2</span>
+                    <span style="font-size: 14px; color: #aaa; font-weight: 500;">Load Data</span>
+                </button>
+                <button id="slot3-btn" class="save-slot-btn" style="display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 18px 24px; font-size: 20px; font-weight: 600; border-radius: 4px; border: 4px solid transparent; background: #3f3f46; color: #fff; cursor: pointer; transition: all 0.1s; text-align: left;">
+                    <span>Slot 3</span>
+                    <span style="font-size: 14px; color: #aaa; font-weight: 500;">Load Data</span>
+                </button>
+                <p style="color: #888; margin-top: 12px; font-size: 14px; text-align: center; font-weight: 500;">Note: Changing slots will restart the emulator software.</p>
+            </div>
         </div>
-        <p style="color: #aaa; margin-top: 24px; font-size: 16px;">Note: Changing slots will restart the emulator.</p>
-        <button id="close-save-btn" style="margin-top: 40px; padding: 12px 36px; font-size: 18px; font-weight: 600; border-radius: 8px; border: none; background: #ef4444; color: white; cursor: pointer; transition: background 0.2s;">Resume (Press -)</button>
+
+        <!-- OS Bottom Controls Hint -->
+        <div style="position: absolute; bottom: 30px; right: 40px; display: flex; gap: 24px; align-items: center;">
+            <div id="close-save-btn" style="display: flex; align-items: center; gap: 8px; color: #fff; font-size: 20px; font-weight: 600; cursor: pointer; text-decoration: none;">
+                <div style="background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.2); border-radius: 6px; width: 36px; height: 36px; display: flex; justify-content: center; align-items: center; font-size: 24px; line-height: 0; padding-bottom: 4px;">-</div>
+                <span>Close</span>
+            </div>
+        </div>
     </div>
 `;
 saveOverlay.style.display = 'none';
@@ -156,9 +185,12 @@ function toggleSaveMenu() {
         const btn = document.getElementById(`slot${num}-btn`);
         if (`Slot ${num}` === gbaApp.currentSlot) {
             btn.style.borderColor = '#0ab9e6';
-            btn.style.boxShadow = '0 0 15px rgba(10, 185, 230, 0.4)';
+            // Slight pop-out effect for selected items on Switch
+            btn.style.transform = 'scale(1.02)';
+            btn.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
         } else {
-            btn.style.borderColor = '#555';
+            btn.style.borderColor = 'transparent';
+            btn.style.transform = 'scale(1)';
             btn.style.boxShadow = 'none';
         }
     });
@@ -184,13 +216,20 @@ setTimeout(() => {
     document.getElementById('slot3-btn').onclick = () => selectSlot('Slot 3');
     document.getElementById('close-save-btn').onclick = () => toggleSaveMenu();
 
-    // Hover effects
+    // Hover effects (matches Switch subtle grey highlight)
     document.querySelectorAll('.save-slot-btn').forEach(btn => {
-        btn.addEventListener('mouseenter', e => { if (e.target.style.borderColor === 'rgb(85, 85, 85)') e.target.style.borderColor = '#888'; });
-        btn.addEventListener('mouseleave', e => { if (e.target.style.borderColor === 'rgb(136, 136, 136)') e.target.style.borderColor = '#555'; });
+        btn.addEventListener('mouseenter', e => {
+            e.target.style.background = '#4f4f56';
+        });
+        btn.addEventListener('mouseleave', e => {
+            e.target.style.background = '#3f3f46';
+        });
     });
-    document.getElementById('close-save-btn').addEventListener('mouseenter', e => e.target.style.background = '#dc2626');
-    document.getElementById('close-save-btn').addEventListener('mouseleave', e => e.target.style.background = '#ef4444');
+
+    // Bottom right button hover
+    const closeBtn = document.getElementById('close-save-btn');
+    closeBtn.addEventListener('mouseenter', e => { e.currentTarget.style.opacity = '0.7'; });
+    closeBtn.addEventListener('mouseleave', e => { e.currentTarget.style.opacity = '1'; });
 }, 100);
 
 function playAchievementSound() {
@@ -410,8 +449,7 @@ function drawCanvas() {
 
     // Profile Icon (Top Left)
     ctx.fillStyle = '#ef4444';
-    ctx.beginPath();
-    ctx.arc(40, 40, 20, 0, Math.PI * 2);
+    drawRoundedRect(20, 20, 40, 40, 8); // 8px rounded corners instead of full circle
     ctx.fill();
 
     // 3. Game Title Text (Dynamic active selection)
@@ -745,6 +783,15 @@ const tabletD = 0.5;
 const bodyGeo = new RoundedBoxGeometry(tabletW, tabletH, tabletD, 4, 0.2);
 const body = new THREE.Mesh(bodyGeo, tabletMat);
 switchGroup.add(body);
+
+// Back cover - matte material matching the top edge between bumpers
+// Must sit PAST the bezel's back face (bezel depth = tabletD + 0.02, back at z = -0.26)
+const backPanelGeo = new THREE.PlaneGeometry(tabletW - 0.05, tabletH - 0.05);
+const backPanel = new THREE.Mesh(backPanelGeo, tabletMat);
+backPanel.position.set(0, 0, -((tabletD + 0.02) / 2) - 0.003); // z = -0.263, covers bezel back
+backPanel.rotation.y = Math.PI; // Face outward (away from screen)
+switchGroup.add(backPanel);
+
 
 // Screen Bezel (Glossy) - uniform border
 const bezelGeo = new RoundedBoxGeometry(tabletW - 0.1, tabletH - 0.1, tabletD + 0.02, 4, 0.15);

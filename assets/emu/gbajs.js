@@ -8726,10 +8726,11 @@ var require_audio = __commonJS({
   "node_modules/gbajs/js/audio.js"(exports, module) {
     init_polyfill_buffer();
     function GameBoyAdvanceAudio() {
-      var AudioContext = null;
+      var AudioContext = window.AudioContext || window.webkitAudioContext;
       if (AudioContext) {
         var self2 = this;
         this.context = new AudioContext();
+        this.context.resume(); // Modern browsers require explicit resume after user gesture
         this.bufferSize = 0;
         this.bufferSize = 4096;
         this.maxSamples = this.bufferSize << 2;
@@ -8869,6 +8870,7 @@ var require_audio = __commonJS({
           } catch (e) {
           }
         } else if (this.enabled) {
+          this.context.resume(); // Ensure context is running after user gesture
           this.jsAudio.connect(this.context.destination);
         }
       }
