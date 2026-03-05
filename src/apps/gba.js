@@ -216,40 +216,53 @@ export class GBAApp {
     }
 
     /**
-     * Recursively traverses the freeze state and converts gbajs Blob wrappers
-     * back into raw ArrayBuffers, slicing off the 4-byte Serializer length header.
+     * Synchronously finds all Blob objects in the state tree and replaces them asynchronously.
+     * This avoids massive event-loop starvation from sequential awaits in deep trees.
      */
-    async unpackStateBlobs(obj) {
-        if (!obj || typeof obj !== 'object') return obj;
+    async unpackStateBlobs(stateObj) {
+        if (!stateObj || typeof stateObj !== 'object') return stateObj;
 
-        if (obj instanceof Blob) {
-            const buffer = await obj.arrayBuffer();
+        const blobTasks = [];
+
+        // 1. Synchronous deep scan to find all Blobs and their parent references
+        function scan(obj, parent, key) {
+            if (!obj || typeof obj !== 'object') return;
+
+            if (obj && typeof obj.arrayBuffer === 'function') {
+                // Register a replacement task
+                blobTasks.push(async () => {
+                    const buffer = await obj.arrayBuffer();
+                    parent[key] = buffer.slice(4); // Slice off 4-byte Serializer header
+                });
+                return;
+            }
+
+            if (obj instanceof ArrayBuffer || ArrayBuffer.isView(obj)) {
+                return; // Do not recurse into typed arrays
+            }
+
+            if (Array.isArray(obj)) {
+                for (let i = 0; i < obj.length; i++) scan(obj[i], obj, i);
+            } else {
+                for (const k in obj) {
+                    // Prevent descending into native getters or nulls
+                    if (Object.prototype.hasOwnProperty.call(obj, k)) scan(obj[k], obj, k);
+                }
+            }
+        }
+
+        // Start scan. If the root itself is a blob, handle separately.
+        if (stateObj && typeof stateObj.arrayBuffer === 'function') {
+            const buffer = await stateObj.arrayBuffer();
             return buffer.slice(4);
         }
 
-        // Do not recurse into native buffers/views (prevents iterating over millions of array indices)
-        if (obj instanceof ArrayBuffer || ArrayBuffer.isView(obj)) {
-            return obj;
-        }
+        scan(stateObj, null, null);
 
-        if (Array.isArray(obj)) {
-            for (let i = 0; i < obj.length; i++) {
-                if (obj[i] instanceof Blob) {
-                    obj[i] = await this.unpackStateBlobs(obj[i]);
-                } else if (typeof obj[i] === 'object') {
-                    await this.unpackStateBlobs(obj[i]);
-                }
-            }
-        } else {
-            for (const key in obj) {
-                if (obj[key] instanceof Blob) {
-                    obj[key] = await this.unpackStateBlobs(obj[key]);
-                } else if (typeof obj[key] === 'object') {
-                    await this.unpackStateBlobs(obj[key]);
-                }
-            }
-        }
-        return obj;
+        // 2. Execute all Blob arrayBuffer() extractions concurrently
+        await Promise.all(blobTasks.map(task => task()));
+
+        return stateObj;
     }
 
     handleInput(action, isDown) {

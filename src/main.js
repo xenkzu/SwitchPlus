@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { SnakeApp } from './apps/snake.js';
+import { SnakeIoApp } from './apps/snakeio.js';
 import { PongApp } from './apps/pong.js';
 import { SettingsApp } from './apps/settings.js';
 import { Progress } from './apps/progress.js';
@@ -73,9 +74,10 @@ const gridH = Math.floor(h / gridSize);
 let activeGameIndex = 0;
 const games = [
     { title: "Snake", color: "#10b981", img: "assets/snake.jpg", justifyRight: true },
+    { title: "Snake.io", color: "#8b5cf6", img: "assets/snakeio.png" }, // New generic Snake.io tile
     { title: "Pong", color: "#b91c1c", img: "assets/pong.jpg" },
-    { title: "Daily Challenge", color: "#eab308", img: "assets/daily.png" }, // New generic daily app tile
-    { title: "Pokémon FireRed", color: "#ef4444", img: "assets/firered.png" }, // Live GBA Emulator
+    { title: "Daily Challenge", color: "#eab308", img: "assets/daily.png" },
+    { title: "Pokémon FireRed", color: "#ef4444", img: "assets/firered.png" },
     { title: "Super Smash Bros", color: "#4c1d95", img: "" },
     { title: "System Settings", color: "#2a2a2a", img: "" }
 ];
@@ -100,10 +102,11 @@ let bootTime = 0;
 let isBooting = true;
 
 // --- Native Mini-Games State ---
-let currentGameApp = null; // 'snake' or 'pong' or 'settings'
+let currentGameApp = null; // 'snake', 'snakeio', 'pong', or 'settings'
 
 // Native Modules
 const snakeApp = new SnakeApp(gridW, gridH, gridSize);
+const snakeIoApp = new SnakeIoApp(gridW, gridH, gridSize);
 const pongApp = new PongApp(gridW, gridH, gridSize);
 const gbaApp = new GBAApp();
 const settingsApp = new SettingsApp();
@@ -111,6 +114,7 @@ const settingsApp = new SettingsApp();
 // Wire up global Hard Mode toggle
 settingsApp.onHardModeToggle = (isEnabled) => {
     snakeApp.isHardMode = isEnabled;
+    snakeIoApp.isHardMode = isEnabled;
     pongApp.isHardMode = isEnabled;
     toastQueue.push(`Hard Mode ${isEnabled ? 'Enabled 🔥' : 'Disabled'}`);
 };
@@ -1100,6 +1104,7 @@ function pressAction(action) {
                 gbaApp.pause();
             }
             isOpeningGame = false;
+            currentGameApp = null;
         } else {
             if (currentGameApp.handleInput && !isSaveMenuOpen) currentGameApp.handleInput(action, true);
         }
@@ -1120,12 +1125,15 @@ function pressAction(action) {
             currentGameApp = snakeApp;
             snakeApp.reset();
         } else if (activeGameIndex === 1) {
+            currentGameApp = snakeIoApp;
+            snakeIoApp.reset();
+        } else if (activeGameIndex === 2) {
             currentGameApp = pongApp;
             pongApp.reset();
-        } else if (activeGameIndex === 3) {
+        } else if (activeGameIndex === 4) {
             currentGameApp = gbaApp;
             gbaApp.boot();
-        } else if (activeGameIndex === 5) {
+        } else if (activeGameIndex === 6) {
             currentGameApp = settingsApp;
         } else {
             // Placeholder for other unbuilt games
@@ -1195,6 +1203,9 @@ function holdButtonByAction(actionLabel) {
     const mesh = interactableMeshes.find(m => m.userData.action === actionLabel);
     if (mesh) {
         physicalButtonPressed(mesh);
+    } else {
+        // Fallback: Fire action directly if key mapped but no 3D button exists
+        pressAction(actionLabel);
     }
 }
 
@@ -1202,11 +1213,25 @@ function unholdButtonByAction(actionLabel) {
     const mesh = interactableMeshes.find(m => m.userData.action === actionLabel);
     if (mesh) {
         physicalButtonReleased(mesh);
+    } else {
+        // Fallback release
+        releaseAction(actionLabel);
     }
 }
 
 function onKeyDown(event) {
     if (event.repeat) return; // Ignore native keyboard autorepeat
+
+    // --- User Shortcut: Reset Camera & Console ---
+    if (event.shiftKey && event.code === 'KeyS') {
+        console.log("Resetting console and camera...");
+        switchGroup.rotation.set(0, 0, 0); // Straighten console
+        camera.position.set(0, 0, 12);     // Reset camera
+        controls.target.set(0, 0, 0);      // Look dead-center
+        controls.update();
+        event.preventDefault();
+        return;
+    }
 
     // Prevent default scrolling for game keys
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "Enter", "Escape"].includes(event.code)) {
